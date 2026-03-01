@@ -33,7 +33,7 @@ export interface Proposal {
     description: string | null
     status: 'pending' | 'accepted' | 'rejected'
     source: 'api' | 'trigger' | 'reaction' | 'agent' | 'human'
-    proposed_steps: any[] | null
+    proposed_steps: unknown[] | null
     created_at: string
     reviewed_at: string | null
 }
@@ -60,4 +60,13 @@ export type ProposalWithAgent = Proposal & {
 
 export type EventWithAgent = AgentEvent & {
     agents: Agent | null
+}
+
+export interface WeightLog {
+    id: string
+    weight: number
+    unit: 'kg' | 'lb'
+    logged_at: string
+    source: string
+    notes?: string
 }

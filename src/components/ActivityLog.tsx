@@ -6,9 +6,114 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { EventWithAgent } from '@/lib/types'
-import { Activity, Clock, User, Tag, Terminal, Info, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Activity, User, Tag, Terminal, Info, AlertTriangle, CheckCircle, type LucideIcon } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
+
+// We add some inline styles here that could also be moved to CommandCenter.css
+// But keeping them here makes the component self-contained for its specific layout.
+const styles = {
+    container: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        height: '400px', // Fixed height with scroll for the feed
+        overflowY: 'auto' as const,
+    },
+    loading: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '3rem',
+        gap: '1rem',
+        color: 'var(--text-muted)',
+    },
+    empty: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '3rem',
+        textAlign: 'center' as const,
+    },
+    emptyIconWrap: {
+        width: '4rem',
+        height: '4rem',
+        backgroundColor: 'var(--bg-elevated)',
+        borderRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        margin: '0 auto 1rem auto',
+    },
+    row: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '1rem',
+        padding: '1.25rem',
+        borderBottom: '1px solid var(--border-subtle)',
+        transition: 'background-color 0.2s ease',
+    },
+    iconBox: {
+        width: '2.5rem',
+        height: '2.5rem',
+        borderRadius: '0.75rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        marginTop: '0.25rem'
+    },
+    content: {
+        flex: 1,
+        minWidth: 0,
+    },
+    header: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '1rem',
+    },
+    title: {
+        margin: 0,
+        fontSize: '1rem',
+        fontWeight: 900,
+        color: 'var(--text-primary)',
+        whiteSpace: 'nowrap' as const,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    },
+    time: {
+        fontSize: '0.625rem',
+        fontWeight: 700,
+        color: 'var(--text-muted)',
+        textTransform: 'uppercase' as const,
+        letterSpacing: '0.05em',
+        whiteSpace: 'nowrap' as const,
+    },
+    summary: {
+        margin: '0.25rem 0 0 0',
+        fontSize: '0.875rem',
+        color: 'var(--text-secondary)',
+        fontWeight: 500,
+    },
+    metaGrid: {
+        display: 'flex',
+        flexWrap: 'wrap' as const,
+        gap: '0.75rem',
+        marginTop: '0.75rem',
+    },
+    metaItem: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.375rem',
+        fontSize: '0.625rem',
+        fontWeight: 700,
+        color: 'var(--text-muted)',
+        textTransform: 'uppercase' as const,
+        letterSpacing: '0.05em',
+    }
+}
 
 export function ActivityLog() {
     const [events, setEvents] = useState<EventWithAgent[]>([])
@@ -48,26 +153,28 @@ export function ActivityLog() {
 
     if (loading) {
         return (
-            <div className="p-8 flex flex-col items-center gap-4 text-slate-400">
-                <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm font-bold animate-pulse">Rastreando eventos...</p>
+            <div style={styles.loading}>
+                <div style={{ width: '2.5rem', height: '2.5rem', border: '3px solid var(--brand-blue)', borderTopColor: 'transparent', borderRadius: '50%' }} className="animate-spin" />
+                <p style={{ fontSize: '0.875rem', fontWeight: 700 }} className="animate-pulse-soft">Rastreando eventos...</p>
             </div>
         )
     }
 
     if (events.length === 0) {
         return (
-            <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Activity className="w-8 h-8 text-slate-300" />
+            <div style={styles.empty}>
+                <div style={styles.emptyIconWrap}>
+                    <Activity size={32} color="var(--text-muted)" />
                 </div>
-                <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">No hay actividad registrada</p>
+                <p style={{ color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.1em' }}>
+                    No hay actividad registrada
+                </p>
             </div>
         )
     }
 
     return (
-        <div className="bg-white/40 dark:bg-slate-900/40 divide-y divide-slate-200 dark:divide-slate-800 rounded-[2.5rem] overflow-hidden">
+        <div style={styles.container}>
             {events.map((event) => (
                 <EventRow key={event.id} event={event} />
             ))}
@@ -76,53 +183,51 @@ export function ActivityLog() {
 }
 
 function EventRow({ event }: { event: EventWithAgent }) {
-    const kindConfig: Record<string, { color: string; bg: string; icon: any }> = {
-        info: { color: 'text-blue-500', bg: 'bg-blue-500/10', icon: Info },
-        warning: { color: 'text-amber-500', bg: 'bg-amber-500/10', icon: AlertTriangle },
-        error: { color: 'text-red-500', bg: 'bg-red-500/10', icon: AlertTriangle },
-        success: { color: 'text-green-500', bg: 'bg-green-500/10', icon: CheckCircle },
-        action: { color: 'text-indigo-500', bg: 'bg-indigo-500/10', icon: Terminal },
+    const kindConfig: Record<string, { color: string; bg: string; icon: LucideIcon }> = {
+        info: { color: 'var(--brand-blue)', bg: 'rgba(90, 156, 245, 0.1)', icon: Info },
+        warning: { color: 'var(--brand-orange)', bg: 'rgba(229, 133, 15, 0.1)', icon: AlertTriangle },
+        error: { color: 'var(--brand-red)', bg: 'rgba(217, 85, 85, 0.1)', icon: AlertTriangle },
+        success: { color: 'var(--brand-green)', bg: 'rgba(46, 204, 143, 0.1)', icon: CheckCircle },
+        action: { color: 'var(--brand-blue)', bg: 'rgba(90, 156, 245, 0.1)', icon: Terminal },
     }
 
     const config = kindConfig[event.kind] || kindConfig.info
     const Icon = config.icon
 
     return (
-        <div className="p-6 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-            <div className="flex items-start gap-4">
-                <div className={`mt-1 w-10 h-10 rounded-xl ${config.bg} flex items-center justify-center ${config.color} shrink-0`}>
-                    <Icon className="w-5 h-5" />
+        <div style={styles.row} className="activity-row-hover">
+            <div style={{ ...styles.iconBox, backgroundColor: config.bg, color: config.color }}>
+                <Icon size={20} />
+            </div>
+            <div style={styles.content}>
+                <div style={styles.header}>
+                    <h3 style={styles.title}>
+                        {event.title}
+                    </h3>
+                    <span style={styles.time}>
+                        {formatDistanceToNow(new Date(event.created_at), { addSuffix: true, locale: es })}
+                    </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-4">
-                        <h3 className="font-black text-slate-900 dark:text-white tracking-tight truncate">
-                            {event.title}
-                        </h3>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter whitespace-nowrap">
-                            {formatDistanceToNow(new Date(event.created_at), { addSuffix: true, locale: es })}
-                        </span>
+                {event.summary && (
+                    <p style={styles.summary}>
+                        {event.summary}
+                    </p>
+                )}
+                <div style={styles.metaGrid}>
+                    <div style={styles.metaItem}>
+                        <User size={12} />
+                        {event.agents?.display_name || event.agents?.name || 'Sistema'}
                     </div>
-                    {event.summary && (
-                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400 font-medium">
-                            {event.summary}
-                        </p>
-                    )}
-                    <div className="flex flex-wrap gap-3 mt-3">
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
-                            <User className="w-3 h-3" />
-                            {event.agents?.display_name || event.agents?.name || 'Sistema'}
+                    {event.tags && event.tags.length > 0 && (
+                        <div style={styles.metaItem}>
+                            <Tag size={12} />
+                            {event.tags.map(tag => (
+                                <span key={tag} style={{ opacity: 0.7 }}>
+                                    #{tag}
+                                </span>
+                            ))}
                         </div>
-                        {event.tags && event.tags.length > 0 && (
-                            <div className="flex items-center gap-1.5">
-                                <Tag className="w-3 h-3 text-slate-400" />
-                                {event.tags.map(tag => (
-                                    <span key={tag} className="text-[10px] font-bold text-slate-400 tracking-tighter opacity-70">
-                                        #{tag}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                    )}
                 </div>
             </div>
         </div>

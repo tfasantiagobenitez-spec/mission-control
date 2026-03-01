@@ -1,0 +1,163 @@
+/* [COPY-PASTE-SAFE] */
+/* Archivo: src/app/memory/Memory.css */
+
+.memory-page {
+    padding: 2rem;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.memory-header {
+    margin-bottom: 2.5rem;
+}
+
+.memory-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+}
+
+.memory-stat-card {
+    background: var(--surface-card);
+    border: 1px solid var(--border-color);
+    border-radius: 1.25rem;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.memory-stat-card:hover {
+    border-color: var(--brand-blue);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+.memory-stat-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(90, 156, 245, 0.1);
+    color: var(--brand-blue);
+}
+
+.memory-stat-value {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.87);
+}
+
+.memory-stat-label {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.60);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.memory-search-container {
+    background: rgba(30, 30, 30, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+    border-radius: 1.5rem;
+    padding: 0.5rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+    transition: all 0.3s ease;
+}
+
+.memory-search-container:focus-within {
+    border-color: var(--brand-blue);
+    box-shadow: 0 0 0 4px rgba(90, 156, 245, 0.1);
+}
+
+.memory-search-input {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 1rem;
+    flex: 1;
+    padding: 0.75rem 0;
+    outline: none;
+}
+
+.memory-vault {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.engram-card {
+    background: var(--surface-card);
+    border: 1px solid var(--border-color);
+    border-radius: 1rem;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    transition: all 0.2s ease;
+}
+
+.engram-card:hover {
+    background: var(--surface-hover);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.engram-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.engram-meta {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.38);
+}
+
+.engram-id {
+    font-family: monospace;
+    color: var(--brand-orange);
+    opacity: 0.8;
+}
+
+.engram-content {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.87);
+}
+
+.engram-tags {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.engram-tag {
+    background: var(--surface-elevated);
+    color: rgba(255, 255, 255, 0.60);
+    padding: 0.25rem 0.625rem;
+    border-radius: 2rem;
+    font-size: 0.6875rem;
+    border: 1px solid var(--border-color);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

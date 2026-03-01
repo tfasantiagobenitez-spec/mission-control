@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Agent } from '@/lib/types'
-import { Cpu, ShieldCheck, Zap, AlertCircle } from 'lucide-react'
+import { Cpu, Zap, AlertCircle } from 'lucide-react'
 
 export function AgentsList() {
     const [agents, setAgents] = useState<Agent[]>([])

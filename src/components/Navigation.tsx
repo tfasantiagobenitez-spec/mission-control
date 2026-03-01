@@ -5,7 +5,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Rocket, FileText, Activity } from 'lucide-react'
+import { LayoutDashboard, Users, Rocket, FileText, Activity, Heart } from 'lucide-react'
 
 export function Navigation() {
     const pathname = usePathname()
@@ -16,6 +16,7 @@ export function Navigation() {
         { href: '/missions', label: 'Misiones', icon: Rocket },
         { href: '/proposals', label: 'Propuestas', icon: FileText },
         { href: '/activity', label: 'Actividad', icon: Activity },
+        { href: '/health', label: 'Salud', icon: Heart },
     ]
 
     return (
@@ -41,8 +42,8 @@ export function Navigation() {
                                         key={link.href}
                                         href={link.href}
                                         className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${isActive
-                                                ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-                                                : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                                            ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+                                            : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                                             }`}
                                     >
                                         <Icon className="w-4 h-4" />

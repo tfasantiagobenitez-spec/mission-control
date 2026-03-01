@@ -1,60 +1,124 @@
-@import "tailwindcss";
-
-@theme {
-  --color-brand-primary: #4f46e5;
-  --color-brand-secondary: #0ea5e9;
-
-  --shadow-premium: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
-  --shadow-premium-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-}
-
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --border: #e2e8f0;
+  /* Color Architecture */
+  --bg-sidebar: #0D0D0D;
+  --bg-page: #121212;
+  --bg-card: #1E1E1E;
+  --bg-hover: #252525;
+  --bg-elevated: #2A2A2A;
+
+  /* Text Hierarchy */
+  --text-primary: rgba(255, 255, 255, 0.87);
+  --text-secondary: rgba(255, 255, 255, 0.60);
+  --text-muted: rgba(255, 255, 255, 0.38);
+  --text-disabled: rgba(255, 255, 255, 0.25);
+
+  /* Brand Colors */
+  --brand-orange: #E5850F;
+  --brand-blue: #5A9CF5;
+  --brand-green: #2ECC8F;
+  --brand-red: #D95555;
+
+  /* Border Colors */
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #020617;
-    --foreground: #f8fafc;
-    --card: #0f172a;
-    --card-foreground: #f8fafc;
-    --border: #1e293b;
-  }
+/* Reset basics */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-feature-settings: "rlig" 1, "calt" 1;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Glassmorphism Styles */
-.glass-panel {
-  @apply bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-white/20 dark:border-slate-800/50 shadow-premium;
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
-.glass-card {
-  @apply bg-white/40 dark:bg-slate-900/40 backdrop-blur-md border border-white/30 dark:border-slate-800/30 rounded-2xl shadow-premium hover:shadow-premium-hover transition-all duration-300;
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
 }
 
-/* Custom Scrollbar Premium */
-::-webkit-scrollbar {
-  width: 5px;
+ul {
+  list-style: none;
 }
 
-::-webkit-scrollbar-track {
-  @apply bg-transparent;
+/* Layout Utilities */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
 }
 
-::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 dark:bg-slate-700 rounded-full hover:bg-slate-400 dark:hover:bg-slate-600 transition-colors;
+.main-content {
+  flex: 1;
+  padding: 32px;
+  margin-left: 260px;
+  max-width: 1200px;
+  transition: margin-left 0.3s ease;
+}
+
+@media (max-width: 1024px) {
+  .main-content {
+    margin-left: 0;
+    padding: 24px 16px;
+    max-width: 100%;
+  }
+}
+
+/* Base Card Style */
+.premium-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px;
+  transition: border-color 0.2s ease;
+}
+
+.premium-card:hover {
+  border-color: var(--border-hover);
+}
+
+/* Activity row hover utility */
+.activity-row-hover:hover {
+  background-color: var(--bg-hover);
 }
 
 /* Animations */
+@keyframes pulse-dot {
+  0% {
+    box-shadow: 0 0 0 0 rgba(46, 204, 143, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 6px rgba(46, 204, 143, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(46, 204, 143, 0);
+  }
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--brand-green);
+  border-radius: 50%;
+  animation: pulse-dot 2s infinite;
+}
+
 @keyframes pulse-soft {
 
   0%,
@@ -63,10 +127,42 @@ body {
   }
 
   50% {
-    opacity: 0.7;
+    opacity: 0.5;
   }
 }
 
 .animate-pulse-soft {
-  animation: pulse-soft 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Custom Scrollbar Premium */
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-elevated);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }

@@ -1,0 +1,326 @@
+/* [COPY-PASTE-SAFE] */
+/* Archivo: src/app/connections/Connections.css */
+
+.connections-page {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+/* Header (re-using general structure but specific classes if needed) */
+.conn-header {
+    margin-bottom: 1rem;
+}
+
+/* Visual Map Container */
+.conn-map-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    background-color: var(--bg-card);
+    border-radius: 16px;
+    border: 1px solid var(--border-subtle);
+    position: relative;
+    overflow: hidden;
+    /* Add a subtle background grid or dotted pattern for premium feel */
+    background-image: radial-gradient(var(--border-subtle) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+
+.conn-map-title {
+    position: absolute;
+    top: 1.5rem;
+    left: 1.5rem;
+    font-size: 1.125rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.87);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.conn-graph {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3rem;
+    position: relative;
+    width: 100%;
+    max-width: 800px;
+}
+
+@media (min-width: 768px) {
+    .conn-graph {
+        flex-direction: row;
+        gap: 4rem;
+    }
+}
+
+/* Central Node (Agent) */
+.conn-node-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100px;
+    height: 100px;
+    background: var(--bg-elevated);
+    border: 2px solid var(--brand-blue);
+    border-radius: 50%;
+    z-index: 10;
+    position: relative;
+    box-shadow: 0 0 20px rgba(90, 156, 245, 0.2);
+}
+
+.conn-node-center::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    border-radius: 50%;
+    border: 1px solid var(--brand-blue);
+    animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes pulse-ring {
+    0% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+
+    100% {
+        transform: scale(1.3);
+        opacity: 0;
+    }
+}
+
+.conn-node-icon {
+    color: var(--brand-blue);
+    margin-bottom: 0.25rem;
+}
+
+.conn-node-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.87);
+}
+
+/* Satellite Nodes */
+.conn-satellites {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    z-index: 10;
+}
+
+@media (min-width: 768px) {
+    .conn-satellites {
+        gap: 3rem;
+    }
+}
+
+.conn-node-satellite {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 80px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.conn-node-satellite:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.conn-node-satellite[data-status="connected"] {
+    border-top: 2px solid var(--brand-green);
+    background: linear-gradient(180deg, rgba(46, 204, 143, 0.05) 0%, transparent 50%);
+}
+
+.conn-node-satellite[data-status="degraded"] {
+    border-top: 2px solid var(--brand-orange);
+    background: linear-gradient(180deg, rgba(229, 133, 15, 0.05) 0%, transparent 50%);
+}
+
+.conn-node-satellite[data-status="disconnected"] {
+    border-top: 2px solid var(--border-subtle);
+    opacity: 0.5;
+}
+
+.conn-satellite-icon {
+    margin-bottom: 0.25rem;
+    color: rgba(255, 255, 255, 0.87);
+}
+
+.conn-node-satellite[data-status="connected"] .conn-satellite-icon {
+    color: var(--brand-green);
+}
+
+.conn-node-satellite[data-status="degraded"] .conn-satellite-icon {
+    color: var(--brand-orange);
+}
+
+.conn-satellite-label {
+    font-size: 0.65rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.60);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* SVG Lines between nodes */
+.conn-lines-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.conn-line {
+    fill: none;
+    stroke: var(--border-subtle);
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+}
+
+.conn-line-active {
+    stroke: var(--brand-green);
+    opacity: 0.4;
+    animation: flowLine 20s linear infinite;
+}
+
+@keyframes flowLine {
+    to {
+        stroke-dashoffset: -1000;
+    }
+}
+
+/* Integrations List */
+.conn-list-header {
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.conn-list-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.87);
+}
+
+.conn-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.conn-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.conn-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.conn-card-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.conn-card-icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background-color: var(--bg-page);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+}
+
+.conn-card-name {
+    font-size: 1rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.87);
+    margin: 0;
+}
+
+.conn-card-desc {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.60);
+    margin: 0;
+}
+
+.conn-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.conn-status-pill[data-status="connected"] {
+    background-color: rgba(46, 204, 143, 0.1);
+    color: var(--brand-green);
+    border: 1px solid rgba(46, 204, 143, 0.2);
+}
+
+.conn-status-pill[data-status="degraded"] {
+    background-color: rgba(229, 133, 15, 0.1);
+    color: var(--brand-orange);
+    border: 1px solid rgba(229, 133, 15, 0.2);
+}
+
+.conn-status-pill[data-status="disconnected"] {
+    background-color: var(--bg-page);
+    color: rgba(255, 255, 255, 0.60);
+    border: 1px solid var(--border-subtle);
+}
+
+.conn-card-metrics {
+    display: flex;
+    gap: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.conn-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.conn-metric-label {
+    font-size: 0.6875rem;
+    color: rgba(255, 255, 255, 0.38);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.conn-metric-value {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.87);
+    font-family: var(--font-mono);
+}

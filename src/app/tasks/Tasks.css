@@ -1,0 +1,207 @@
+/* [COPY-PASTE-SAFE] */
+/* Archivo: src/app/tasks/Tasks.css */
+
+.tasks-page {
+    animation: fadeIn 0.5s ease-out;
+    height: calc(100vh - 8rem);
+    display: flex;
+    flex-direction: column;
+}
+
+.tasks-header {
+    margin-bottom: 2rem;
+    flex-shrink: 0;
+}
+
+.kanban-board {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(280px, 1fr));
+    gap: 1.5rem;
+    flex-grow: 1;
+    min-height: 0;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+}
+
+.kanban-board::-webkit-scrollbar {
+    height: 6px;
+}
+
+.kanban-board::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+/* Kanban Columns */
+.kanban-column {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+    overflow: hidden;
+}
+
+.column-header {
+    padding: 1.25rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.01);
+}
+
+.column-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.60);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.task-count {
+    font-size: 0.75rem;
+    background: var(--bg-elevated);
+    padding: 2px 8px;
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.38);
+}
+
+.column-content {
+    padding: 1rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    flex-grow: 1;
+}
+
+/* Custom Scrollbar for columns */
+.column-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.column-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.column-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.column-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Task Cards */
+.task-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 1rem;
+    padding: 1rem;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: grab;
+    user-select: none;
+}
+
+.task-card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.task-card:active {
+    cursor: grabbing;
+}
+
+.task-priority-bar {
+    width: 100%;
+    height: 3px;
+    border-radius: 2px;
+    margin-bottom: 0.75rem;
+    background: var(--priority-color, var(--brand-blue));
+}
+
+.task-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 0.75rem;
+}
+
+.task-tag {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+}
+
+.task-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.87);
+    margin-bottom: 1rem;
+    line-height: 1.4;
+}
+
+.task-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.task-agent {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.38);
+}
+
+.agent-avatar-mini {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    background: var(--brand-orange);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 8px;
+    font-weight: 900;
+}
+
+.task-due {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.25);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Priority Colors */
+.priority-critical {
+    --priority-color: var(--brand-red);
+}
+
+.priority-high {
+    --priority-color: var(--brand-orange);
+}
+
+.priority-medium {
+    --priority-color: var(--brand-blue);
+}
+
+.priority-low {
+    --priority-color: var(--brand-green);
+}
