@@ -10,7 +10,8 @@ import {
     Brain,
     Link as LinkIcon,
     Settings,
-    Activity
+    Activity,
+    Users
 } from 'lucide-react'
 import './Sidebar.css'
 
@@ -24,6 +25,7 @@ export function Sidebar() {
         { href: '/tasks', label: 'Tasks', icon: CheckSquare },
         { href: '/content-intel', label: 'Content Intel', icon: BarChart2 },
         { href: '/memory', label: 'Second Brain', icon: Brain }, // Brain icon used for Memory too, maybe change one?
+        { href: '/crm', label: 'Personal CRM', icon: Users },
         { href: '/connections', label: 'Connections', icon: LinkIcon },
         { href: '/settings', label: 'Settings', icon: Settings },
     ]
