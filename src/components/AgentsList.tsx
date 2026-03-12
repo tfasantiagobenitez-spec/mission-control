@@ -1,12 +1,10 @@
-// [COPY-PASTE-SAFE]
-// Archivo: src/components/AgentsList.tsx
-
 'use client'
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Agent } from '@/lib/types'
 import { Cpu, Zap, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
 
 export function AgentsList() {
     const [agents, setAgents] = useState<Agent[]>([])
@@ -67,6 +65,7 @@ export function AgentsList() {
     )
 }
 
+
 function AgentRow({ agent }: { agent: Agent }) {
     const statusConfig = {
         active: { color: 'text-green-500', bg: 'bg-green-500/10', icon: Zap, label: 'En Línea' },
@@ -77,8 +76,14 @@ function AgentRow({ agent }: { agent: Agent }) {
     const config = statusConfig[agent.status as keyof typeof statusConfig] || statusConfig.idle
     const StatusIcon = config.icon
 
+    // Transform name for URL: email_control_agent -> email-control
+    const agentSlug = agent.name.replace(/_/g, '-').replace('-agent', '')
+
     return (
-        <div className="p-6 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+        <Link
+            href={`/agents/${agentSlug}`}
+            className="block p-6 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
+        >
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 group-hover:scale-110 transition-transform">
@@ -102,6 +107,7 @@ function AgentRow({ agent }: { agent: Agent }) {
                     </p>
                 </div>
             </div>
-        </div>
+        </Link>
     )
 }
+

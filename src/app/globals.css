@@ -1,3 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-orange: #E5850F;
+  --color-brand-blue: #5A9CF5;
+  --color-brand-green: #2ECC8F;
+  --color-brand-red: #D95555;
+  --font-inter: var(--font-inter);
+}
+
 :root {
   /* Color Architecture */
   --bg-sidebar: #0D0D0D;

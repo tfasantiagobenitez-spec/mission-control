@@ -1,0 +1,92 @@
+import Database from 'better-sqlite3';
+import path from 'path';
+import os from 'os';
+
+// Path to gravity-claw.db
+const DB_PATH = path.join(os.homedir(), '.openclaw', 'gravity-claw.db');
+
+const db = new Database(DB_PATH);
+
+// Initialize tables
+db.exec(`
+    CREATE TABLE IF NOT EXISTS core_memory (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        category TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS summaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        summary TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+`);
+
+export interface Fact {
+    key: string;
+    value: string;
+    category?: string;
+}
+
+export const sqliteMemory = {
+    // Fact Management
+    saveFact: (fact: Fact) => {
+        const stmt = db.prepare(`
+            INSERT INTO core_memory (key, value, category, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                category = excluded.category,
+                updated_at = CURRENT_TIMESTAMP
+        `);
+        return stmt.run(fact.key, fact.value, fact.category || 'general');
+    },
+
+    getFacts: () => {
+        return db.prepare('SELECT * FROM core_memory').all();
+    },
+
+    // Message Management
+    saveMessage: (role: string, content: string) => {
+        return db.prepare('INSERT INTO messages (role, content) VALUES (?, ?)').run(role, content);
+    },
+
+    getRecentMessages: (limit = 20) => {
+        return db.prepare('SELECT * FROM messages ORDER BY timestamp DESC LIMIT ?').all(limit).reverse();
+    },
+
+    getMessageCount: () => {
+        const result = db.prepare('SELECT COUNT(*) as count FROM messages').get() as { count: number };
+        return result.count;
+    },
+
+    pruneMessages: (limit = 30) => {
+        // Implementation for compaction/pruning logic would be called from the agent loop
+        const count = sqliteMemory.getMessageCount();
+        if (count > limit) {
+            // This is where summarization would trigger before deleting
+            const toDelete = db.prepare('SELECT id FROM messages ORDER BY timestamp ASC LIMIT ?').all(count - (limit / 2)) as { id: number }[];
+            const ids = toDelete.map(m => m.id);
+            if (ids.length > 0) {
+                db.prepare(`DELETE FROM messages WHERE id IN (${ids.join(',')})`).run();
+            }
+        }
+    },
+
+    // Summary Management
+    saveSummary: (summary: string) => {
+        return db.prepare('INSERT INTO summaries (summary) VALUES (?)').run(summary);
+    },
+
+    getLatestSummary: () => {
+        return db.prepare('SELECT * FROM summaries ORDER BY created_at DESC LIMIT 1').get() as { summary: string } | undefined;
+    }
+};

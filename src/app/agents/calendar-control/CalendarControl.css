@@ -1,0 +1,242 @@
+/* CalendarControl.css */
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.btn-calendar-add {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    border: none;
+    color: white;
+    padding: 0.6rem 1.2rem;
+    border-radius: 1rem;
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+}
+
+.btn-calendar-add:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.5);
+    filter: brightness(1.1);
+}
+
+.calendar-days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    margin-bottom: 0.5rem;
+}
+
+.calendar-day-label {
+    text-align: center;
+    font-size: 0.65rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.3);
+    padding: 0.5rem;
+}
+
+.calendar-cells-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-auto-rows: 1fr;
+    flex: 1;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 1.5rem;
+    overflow: hidden;
+}
+
+.calendar-cell {
+    aspect-ratio: 1;
+    padding: 1rem;
+    border-right: 1px solid rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    position: relative;
+    background: rgba(255, 255, 255, 0.01);
+}
+
+.calendar-cell:hover {
+    background: rgba(255, 255, 255, 0.03);
+    z-index: 10;
+}
+
+.calendar-cell.today {
+    background: rgba(79, 70, 229, 0.05);
+}
+
+.calendar-cell.today .day-number {
+    color: #818cf8;
+    background: #818cf815;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.5rem;
+}
+
+.calendar-cell.selected {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(79, 70, 229, 0.3);
+}
+
+.day-number {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 0.5rem;
+    display: inline-block;
+}
+
+.event-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    margin-top: auto;
+}
+
+.event-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.event-dot.status-complete {
+    background: #22c55e;
+}
+
+.event-dot.status-to-do {
+    background: #94a3b8;
+}
+
+.event-dot.status-in-progress {
+    background: #fb923c;
+}
+
+.agenda-item {
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 1.2rem;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    transition: all 0.3s ease;
+}
+
+.agenda-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    transform: translateX(4px);
+    border-color: rgba(79, 70, 229, 0.2);
+}
+
+.status-indicator {
+    width: 3px;
+    height: 38px;
+    border-radius: 4px;
+    background: #94a3b8;
+}
+
+.status-indicator.status-complete {
+    background: #22c55e;
+}
+
+.status-indicator.status-in-progress {
+    background: #fb923c;
+}
+
+.badge-priority {
+    font-size: 8px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.4rem;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.priority-urgent {
+    color: #ef4444;
+    background: #ef444415;
+}
+
+.priority-high {
+    color: #fb923c;
+    background: #fb923c15;
+}
+
+.priority-normal {
+    color: #3b82f6;
+    background: #3b82f615;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(12px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+
+.calendar-input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1.2rem;
+    padding: 1rem 1.2rem;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(79, 70, 229, 0.4);
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1), inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-input::placeholder {
+    color: rgba(255, 255, 255, 0.2);
+}
+
+/* Chrome/Safari specialized date/time icon coloring */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(0.8) sepia(1) hue-rotate(200deg) saturate(5);
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}

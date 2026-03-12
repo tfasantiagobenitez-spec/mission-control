@@ -2,6 +2,7 @@
 // Archivo: src/app/page.tsx
 
 import { createServerClient } from '@/lib/supabase/server'
+import { config } from '@/lib/config'
 import { ActivityLog } from '@/components/ActivityLog'
 import { WeightCard } from '@/components/WeightCard'
 import { Activity, Shield, Rocket, Sparkles, Cpu, HardDrive, Wifi, RadioTower, Database, RefreshCcw, Zap, Heart } from 'lucide-react'
@@ -136,7 +137,7 @@ export default async function DashboardPage() {
                   <Cpu size={16} />
                   <span className="config-label">Core Model</span>
                 </div>
-                <span className="config-value">claude-3-5-sonnet</span>
+                <span className="config-value">{config.openrouter.defaultModel}</span>
               </div>
               <div className="config-item">
                 <div className="config-label-group">

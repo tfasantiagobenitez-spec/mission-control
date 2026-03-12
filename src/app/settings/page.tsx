@@ -3,17 +3,97 @@
 
 'use client'
 
-import { useState } from 'react'
-import { Settings, Shield, Save, Eye, EyeOff, Brain } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Settings, Shield, Save, Eye, EyeOff, Brain, Cpu, Zap, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import './Settings.css'
+
+interface ModelInfo {
+    id: string
+    name: string
+    provider: string
+    context_length: number
+    pricing: { prompt: string; completion: string }
+}
 
 export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState('personality')
     const [showKey, setShowKey] = useState<Record<string, boolean>>({})
+    const [models, setModels] = useState<ModelInfo[]>([])
+    const [defaultModel, setDefaultModel] = useState('')
+    const [selectedModel, setSelectedModel] = useState('')
+    const [orStatus, setOrStatus] = useState<'loading' | 'connected' | 'error'>('loading')
+    const [orError, setOrError] = useState('')
+    const [totalModels, setTotalModels] = useState(0)
+    const [testResult, setTestResult] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string }>({ status: 'idle', message: '' })
 
     const toggleKey = (id: string) => {
         setShowKey(prev => ({ ...prev, [id]: !prev[id] }))
     }
+
+    // Load OpenRouter status and models
+    useEffect(() => {
+        async function loadOpenRouter() {
+            try {
+                const [statusRes, modelsRes] = await Promise.all([
+                    fetch('/api/openrouter/status'),
+                    fetch('/api/openrouter/models'),
+                ])
+
+                const statusData = await statusRes.json()
+                const modelsData = await modelsRes.json()
+
+                if (statusData.connected) {
+                    setOrStatus('connected')
+                } else {
+                    setOrStatus('error')
+                    setOrError(statusData.error || 'Not connected')
+                }
+
+                setDefaultModel(statusData.defaultModel || '')
+                setSelectedModel(statusData.defaultModel || '')
+
+                if (modelsData.success) {
+                    setModels(modelsData.models || [])
+                    setTotalModels(modelsData.totalAvailable || 0)
+                }
+            } catch (err: any) {
+                setOrStatus('error')
+                setOrError(err.message)
+            }
+        }
+        loadOpenRouter()
+    }, [])
+
+    // Test model with a quick message
+    async function testModel() {
+        setTestResult({ status: 'loading', message: 'Enviando mensaje de prueba...' })
+        try {
+            const res = await fetch('/api/openrouter/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: selectedModel,
+                    messages: [{ role: 'user', content: 'Responde solo con: "OpenRouter conectado correctamente desde Mission Control 🚀"' }],
+                    max_tokens: 100,
+                }),
+            })
+            const data = await res.json()
+            if (data.success && data.choices?.[0]) {
+                setTestResult({ status: 'success', message: data.choices[0].message.content })
+            } else {
+                setTestResult({ status: 'error', message: data.error || 'Error desconocido' })
+            }
+        } catch (err: any) {
+            setTestResult({ status: 'error', message: err.message })
+        }
+    }
+
+    // Group models by provider
+    const groupedModels = models.reduce<Record<string, ModelInfo[]>>((acc, model) => {
+        if (!acc[model.provider]) acc[model.provider] = []
+        acc[model.provider].push(model)
+        return acc
+    }, {})
 
     return (
         <div className="settings-page">
@@ -40,6 +120,20 @@ export default function SettingsPage() {
                     onClick={() => setActiveTab('personality')}
                 >
                     Personality
+                </button>
+                <button
+                    className={`settings-tab ${activeTab === 'openrouter' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('openrouter')}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                >
+                    <Zap size={14} />
+                    OpenRouter
+                    {orStatus === 'connected' && (
+                        <span style={{
+                            width: '8px', height: '8px', borderRadius: '50%',
+                            background: 'var(--brand-green)', display: 'inline-block',
+                        }} />
+                    )}
                 </button>
                 <button
                     className={`settings-tab ${activeTab === 'security' ? 'active' : ''}`}
@@ -139,6 +233,122 @@ export default function SettingsPage() {
                                     <Save size={18} />
                                     Guardar Cambios
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── OpenRouter Tab ── */}
+                {activeTab === 'openrouter' && (
+                    <div className="settings-grid">
+                        <div className="settings-section-info">
+                            <h2 className="settings-section-title">OpenRouter Multi-Model</h2>
+                            <p className="settings-section-desc">
+                                Accede a cientos de modelos de IA a través de una sola API.
+                                Cambia entre proveedores sin fricción.
+                            </p>
+                            <div style={{ marginTop: '1rem' }}>
+                                <div className="or-status-badge" data-status={orStatus}>
+                                    {orStatus === 'loading' && <Loader2 size={14} className="animate-spin" />}
+                                    {orStatus === 'connected' && <CheckCircle size={14} />}
+                                    {orStatus === 'error' && <XCircle size={14} />}
+                                    <span>
+                                        {orStatus === 'loading' && 'Verificando...'}
+                                        {orStatus === 'connected' && 'Conectado'}
+                                        {orStatus === 'error' && (orError || 'Error')}
+                                    </span>
+                                </div>
+                                {totalModels > 0 && (
+                                    <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.38)', marginTop: '0.5rem' }}>
+                                        {totalModels} modelos disponibles en OpenRouter
+                                    </p>
+                                )}
+                            </div>
+                            <div style={{ marginTop: '1rem', color: 'var(--brand-orange)', opacity: 0.5 }}>
+                                <Zap size={48} strokeWidth={1} />
+                            </div>
+                        </div>
+
+                        <div className="premium-card">
+                            <div className="settings-form-content">
+                                {/* Connection Info */}
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        API Key
+                                        <span className="form-label-hint">Configurada en .env.local</span>
+                                    </label>
+                                    <div className="input-with-action">
+                                        <input
+                                            type={showKey['openrouter'] ? 'text' : 'password'}
+                                            className="form-input"
+                                            readOnly
+                                            value="sk-or-v1-••••••••••••••••••••"
+                                        />
+                                        <button className="input-action-btn" onClick={() => toggleKey('openrouter')}>
+                                            {showKey['openrouter'] ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Model Selector */}
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        Modelo Activo
+                                        <span className="form-label-hint">
+                                            Default: {defaultModel}
+                                        </span>
+                                    </label>
+                                    <select
+                                        className="form-input form-select"
+                                        value={selectedModel}
+                                        onChange={(e) => setSelectedModel(e.target.value)}
+                                    >
+                                        {Object.entries(groupedModels).map(([provider, providerModels]) => (
+                                            <optgroup key={provider} label={provider}>
+                                                {providerModels.map(m => (
+                                                    <option key={m.id} value={m.id}>
+                                                        {m.name} {m.context_length ? `(${(m.context_length / 1000).toFixed(0)}k ctx)` : ''}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Selected Model Info */}
+                                {selectedModel && (
+                                    <div className="or-model-info">
+                                        <div className="or-model-chip">
+                                            <Cpu size={14} />
+                                            <span>{selectedModel}</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Test Button */}
+                                <div className="form-group">
+                                    <button
+                                        className="btn-primary"
+                                        onClick={testModel}
+                                        disabled={testResult.status === 'loading' || orStatus !== 'connected'}
+                                        style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}
+                                    >
+                                        {testResult.status === 'loading' ? (
+                                            <Loader2 size={18} className="animate-spin" />
+                                        ) : (
+                                            <Zap size={18} />
+                                        )}
+                                        Probar Modelo
+                                    </button>
+                                </div>
+
+                                {/* Test Result */}
+                                {testResult.status !== 'idle' && testResult.status !== 'loading' && (
+                                    <div className={`or-test-result ${testResult.status}`}>
+                                        {testResult.status === 'success' ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                                        <span>{testResult.message}</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

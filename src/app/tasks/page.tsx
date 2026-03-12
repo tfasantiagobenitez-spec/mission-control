@@ -2,7 +2,7 @@
 // Archivo: src/app/tasks/page.tsx
 
 'use client'
-
+import { useState, useEffect } from 'react'
 import {
     CheckSquare,
     Clock,
@@ -12,60 +12,68 @@ import {
 import './Tasks.css'
 
 export default function TasksPage() {
-    const tasks = [
-        {
-            id: 'T-1',
-            title: 'Optimizar flujo de datos en Content Intel',
-            priority: 'critical',
-            tags: ['Backend', 'Performance'],
-            agent: 'Alpha',
-            due: 'Hoy',
-            status: 'todo'
-        },
-        {
-            id: 'T-2',
-            title: 'Refactorizar Sidebar para movilidad',
-            priority: 'high',
-            tags: ['UI/UX', 'Mobile'],
-            agent: 'Beta',
-            due: 'Mañana',
-            status: 'in-progress'
-        },
-        {
-            id: 'T-3',
-            title: 'Actualizar documentación de API',
-            priority: 'medium',
-            tags: ['Docs'],
-            agent: 'Alpha',
-            due: '2 Mar',
-            status: 'todo'
-        },
-        {
-            id: 'T-4',
-            title: 'Sincronizar base de datos con Supabase',
-            priority: 'low',
-            tags: ['Data'],
-            agent: 'Gamma',
-            due: 'Completado',
-            status: 'completed'
-        },
-        {
-            id: 'T-5',
-            title: 'Implementar búsqueda global',
-            priority: 'high',
-            tags: ['Search', 'Feature'],
-            agent: 'Beta',
-            due: '4 Mar',
-            status: 'todo'
-        }
-    ]
+    const [tasks, setTasks] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+    const [isModalOpen, setIsModalOpen] = useState(false)
+    const [newTaskName, setNewTaskName] = useState('')
+    const [isCreating, setIsCreating] = useState(false)
 
-    const getTasksByStatus = (status: string) => tasks.filter(t => t.status === status)
+    async function fetchTasks() {
+        try {
+            const response = await fetch('/api/clickup/tasks')
+            const data = await response.json()
+            if (data.tasks) {
+                const mappedTasks = data.tasks.map((t: any) => ({
+                    id: t.id,
+                    title: t.name,
+                    priority: t.priority?.priority === 'urgent' ? 'critical' : t.priority?.priority === 'high' ? 'high' : t.priority?.priority === 'normal' ? 'medium' : t.priority?.priority === 'low' ? 'low' : 'medium',
+                    tags: t.tags?.map((tag: any) => tag.name) || [],
+                    agent: t.assignees?.[0]?.username || 'Sistema',
+                    due: t.due_date ? new Date(parseInt(t.due_date)).toLocaleDateString() : 'N/A',
+                    status: t.status.status.toLowerCase().replace(' ', '-')
+                }))
+                setTasks(mappedTasks)
+            }
+        } catch (error) {
+            console.error('Error fetching tasks from ClickUp:', error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        fetchTasks()
+    }, [])
+
+    const handleAddTask = async () => {
+        if (!newTaskName.trim()) return
+
+        setIsCreating(true)
+        try {
+            const response = await fetch('/api/clickup/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newTaskName })
+            })
+
+            if (response.ok) {
+                setNewTaskName('')
+                setIsModalOpen(false)
+                fetchTasks() // Refrescar lista
+            }
+        } catch (error) {
+            console.error('Error creating task:', error)
+        } finally {
+            setIsCreating(false)
+        }
+    }
+
+    const getTasksByStatus = (status: string) => tasks.filter(t => t.status.includes(status))
 
     const columns = [
-        { id: 'todo', title: 'To Do', icon: <CheckSquare size={16} />, color: 'var(--brand-blue)' },
-        { id: 'in-progress', title: 'In Progress', icon: <Clock size={16} />, color: 'var(--brand-orange)' },
-        { id: 'completed', title: 'Completed', icon: <Plus size={16} style={{ transform: 'rotate(45deg)' }} />, color: 'var(--brand-green)' }
+        { id: 'pendiente', title: 'Pendiente', icon: <CheckSquare size={16} />, color: 'var(--brand-blue)' },
+        { id: 'en-curso', title: 'En Curso', icon: <Clock size={16} />, color: 'var(--brand-orange)' },
+        { id: 'completado', title: 'Completado', icon: <Plus size={16} style={{ transform: 'rotate(45deg)' }} />, color: 'var(--brand-green)' }
     ]
 
     return (
@@ -82,7 +90,11 @@ export default function TasksPage() {
                             Orquestación y seguimiento de objetivos en tiempo real.
                         </p>
                     </div>
-                    <button className="btn-primary" style={{ padding: '0.75rem 1.5rem', borderRadius: '1rem' }}>
+                    <button
+                        className="btn-primary"
+                        style={{ padding: '0.75rem 1.5rem', borderRadius: '1rem' }}
+                        onClick={() => setIsModalOpen(true)}
+                    >
                         <Plus size={18} />
                         Nueva Tarea
                     </button>
@@ -100,11 +112,11 @@ export default function TasksPage() {
                             <span className="task-count">{getTasksByStatus(col.id).length}</span>
                         </div>
                         <div className="column-content">
-                            {getTasksByStatus(col.id).map(task => (
+                            {getTasksByStatus(col.id).map((task: any) => (
                                 <div key={task.id} className={`task-card priority-${task.priority}`}>
                                     <div className="task-priority-bar"></div>
                                     <div className="task-tags">
-                                        {task.tags.map(tag => (
+                                        {task.tags.map((tag: string) => (
                                             <span key={tag} className="task-tag">{tag}</span>
                                         ))}
                                     </div>
@@ -125,6 +137,43 @@ export default function TasksPage() {
                     </div>
                 ))}
             </div>
+
+            {/* Modal de Nueva Tarea */}
+            {isModalOpen && (
+                <div className="task-modal-overlay">
+                    <div className="task-modal-content">
+                        <h2 className="task-modal-title">
+                            <Plus size={20} />
+                            Nueva Misión en ClickUp
+                        </h2>
+                        <div className="task-form-group">
+                            <label className="task-form-label">Nombre de la Tarea</label>
+                            <input
+                                type="text"
+                                className="task-input"
+                                placeholder="Ej: Comprar provisiones..."
+                                value={newTaskName}
+                                onChange={(e) => setNewTaskName(e.target.value)}
+                                autoFocus
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
+                            />
+                        </div>
+                        <div className="task-modal-actions">
+                            <button className="btn-secondary" onClick={() => setIsModalOpen(false)}>
+                                Cancelar
+                            </button>
+                            <button
+                                className="btn-primary"
+                                onClick={handleAddTask}
+                                disabled={isCreating || !newTaskName.trim()}
+                            >
+                                {isCreating ? 'Creando...' : 'Crear Tarea'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
+

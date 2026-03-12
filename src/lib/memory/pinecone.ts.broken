@@ -1,0 +1,53 @@
+import { Pinecone } from '@pinecone-database/pinecone';
+
+// In a real app these would be in .env.local
+// Using the key found in mcp_config.json
+const PINECONE_API_KEY = 'pcsk_6XZSod_UpKy35cLo1TkfaLR9KVwzESsn6wm9benzrkGSf3h3bZ15YpDLbDcKud4FyDJGJW';
+const pc = new Pinecone({ apiKey: PINECONE_API_KEY });
+
+// Assuming index "gravity-claw" or similar. 
+// If it doesn't exist, we might need to handle creation or just use the first available.
+const indexName = 'gravity-claw';
+
+export const pineconeMemory = {
+    // semantic search in conversations namespace
+    searchConversations: async (query: string, topK = 3) => {
+        const index = pc.index(indexName);
+        const results = await index.namespace('conversations').query({
+            topK,
+            vector: [], // This would be populated by the embedding model
+            includeMetadata: true,
+        });
+
+        // Filter by relevance threshold (0.3 as per spec)
+        return results.matches.filter(m => (m.score || 0) >= 0.3);
+    },
+
+    // Ingest YouTube, URLs, etc. in knowledge namespace
+    addToKnowledge: async (id: string, text: string, metadata: any = {}) => {
+        const index = pc.index(indexName);
+        await index.namespace('knowledge').upsert([{
+            id,
+            values: [], // To be populated by embedding
+            metadata: {
+                ...metadata,
+                text,
+                timestamp: new Date().toISOString()
+            }
+        }]);
+    },
+
+    // Embed and store an exchange
+    storeExchange: async (id: string, text: string, role: string) => {
+        const index = pc.index(indexName);
+        await index.namespace('conversations').upsert([{
+            id,
+            values: [], // To be populated by embedding
+            metadata: {
+                text,
+                role,
+                timestamp: new Date().toISOString()
+            }
+        }]);
+    }
+};

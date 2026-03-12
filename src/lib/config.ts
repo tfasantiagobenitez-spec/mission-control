@@ -8,9 +8,9 @@ const OPENCLAW_HOME = process.env.OPENCLAW_HOME
 
 export const config = {
     supabase: {
-        url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        url: (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/["']/g, ''),
+        anonKey: (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim().replace(/["']/g, ''),
+        serviceRoleKey: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim().replace(/["']/g, ''),
     },
     openclaw: {
         home: OPENCLAW_HOME,
@@ -18,7 +18,13 @@ export const config = {
             || path.join(OPENCLAW_HOME, 'workspace', '07_OUTPUTS'),
     },
     api: {
-        internalToken: process.env.INTERNAL_API_TOKEN || '',
+        internalToken: (process.env.INTERNAL_API_TOKEN || '').trim().replace(/["']/g, ''),
+    },
+    openrouter: {
+        apiKey: (process.env.OPENROUTER_API_KEY || '').trim().replace(/["']/g, ''),
+        // Hardcoded to ensure stability after regression
+        defaultModel: 'anthropic/claude-3.5-sonnet',
+        baseUrl: 'https://openrouter.ai/api/v1',
     },
 } as const
 

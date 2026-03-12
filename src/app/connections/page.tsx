@@ -1,49 +1,72 @@
 // [COPY-PASTE-SAFE]
 // Archivo: src/app/connections/page.tsx
 
-import { Link as LinkIcon, Database, HardDrive, FileText, Search, AlertCircle, RefreshCcw } from 'lucide-react'
+'use client'
+
+import { useState, useEffect } from 'react'
+import {
+    Link as LinkIcon,
+    Database,
+    HardDrive,
+    FileText,
+    Search,
+    AlertCircle,
+    RefreshCcw,
+    Github,
+    Chrome,
+    BookOpen
+} from 'lucide-react'
 import './Connections.css'
 
-export default function ConnectionsPage() {
+interface MCPServer {
+    id: string
+    name: string
+    status: string
+    description: string
+    metrics: {
+        latency: string
+        lastSync: string
+    }
+}
 
-    const connections = [
-        {
-            id: 'supabase',
-            name: 'Supabase',
-            description: 'Primary Vector DB & Auth',
-            status: 'connected',
-            latency: '45ms',
-            lastSync: 'Hace 2 min',
-            icon: Database
-        },
-        {
-            id: 'notion',
-            name: 'Notion',
-            description: 'Second Brain Sync',
-            status: 'connected',
-            latency: '120ms',
-            lastSync: 'Hace 5 min',
-            icon: FileText
-        },
-        {
-            id: 'firecrawl',
-            name: 'Firecrawl',
-            description: 'Web Scraping Engine',
-            status: 'degraded',
-            latency: '850ms',
-            lastSync: 'Hace 1 hora',
-            icon: Search
-        },
-        {
-            id: 'pinecone',
-            name: 'Pinecone',
-            description: 'Fast Vector Search',
-            status: 'disconnected',
-            latency: '--',
-            lastSync: 'Desconocido',
-            icon: HardDrive
+export default function ConnectionsPage() {
+    const [connections, setConnections] = useState<MCPServer[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        async function fetchConnections() {
+            try {
+                const response = await fetch('/api/mcp')
+                const data = await response.json()
+                if (data.success) {
+                    setConnections(data.servers)
+                }
+            } catch (error) {
+                console.error('Failed to fetch MCP connections:', error)
+            } finally {
+                setLoading(false)
+            }
         }
-    ]
+        fetchConnections()
+    }, [])
+
+    const getIcon = (id: string) => {
+        const lowerId = id.toLowerCase()
+        if (lowerId.includes('supabase')) return Database
+        if (lowerId.includes('notion')) return FileText
+        if (lowerId.includes('firecrawl')) return Search
+        if (lowerId.includes('pinecone')) return HardDrive
+        if (lowerId.includes('github')) return Github
+        if (lowerId.includes('notebook')) return BookOpen
+        if (lowerId.includes('fireflies')) return LinkIcon
+        return LinkIcon
+    }
+
+    if (loading) {
+        return <div className="connections-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+            <div className="animate-pulse" style={{ color: 'var(--brand-blue)', fontWeight: 600 }}>Cargando Red Neural...</div>
+        </div>
+    }
 
     return (
         <div className="connections-page">
@@ -77,9 +100,7 @@ export default function ConnectionsPage() {
                 </div>
 
                 <div className="conn-graph">
-                    {/* SVG paths for lines */}
                     <svg className="conn-lines-svg">
-                        {/* Define glowing gradient */}
                         <defs>
                             <linearGradient id="glow-line" x1="0%" y1="0%" x2="100%" y2="0%">
                                 <stop offset="0%" stopColor="var(--brand-green)" stopOpacity="0.2" />
@@ -87,43 +108,55 @@ export default function ConnectionsPage() {
                                 <stop offset="100%" stopColor="var(--brand-green)" stopOpacity="0.2" />
                             </linearGradient>
                         </defs>
-                        {/* We use basic horizontal lines here for structural mock. Real apps would calculate positions. */}
-                        <line x1="50%" y1="50%" x2="25%" y2="25%" className="conn-line conn-line-active" />
-                        <line x1="50%" y1="50%" x2="25%" y2="75%" className="conn-line conn-line-active" />
-                        <line x1="50%" y1="50%" x2="75%" y2="25%" className="conn-line" style={{ stroke: 'var(--brand-orange)' }} />
-                        <line x1="50%" y1="50%" x2="75%" y2="75%" className="conn-line" />
+                        {connections.map((conn, idx) => {
+                            const angle = (idx / connections.length) * 2 * Math.PI
+                            const x2 = 50 + 25 * Math.cos(angle)
+                            const y2 = 50 + 25 * Math.sin(angle)
+                            return (
+                                <line
+                                    key={`line-${conn.id}`}
+                                    x1="50%" y1="50%"
+                                    x2={`${x2}%`} y2={`${y2}%`}
+                                    className={`conn-line ${conn.status === 'connected' ? 'conn-line-active' : ''}`}
+                                />
+                            )
+                        })}
                     </svg>
 
                     {/* Central Node */}
                     <div className="conn-node-center">
                         <div className="conn-node-icon">
-                            <HardDrive size={32} />
+                            <Chrome size={32} />
                         </div>
-                        <span className="conn-node-label">CORE AI</span>
+                        <span className="conn-node-label">OPEN CLAW</span>
                     </div>
 
                     {/* Satellite Nodes layer */}
                     <div style={{ position: 'absolute', width: '100%', height: '100%', pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {/* Top Left */}
-                        <div className="conn-node-satellite shadow-sm" data-status="connected" style={{ position: 'absolute', top: '20%', left: '20%', pointerEvents: 'auto' }}>
-                            <Database size={24} className="conn-satellite-icon" />
-                            <span className="conn-satellite-label">Supabase</span>
-                        </div>
-                        {/* Bottom Left */}
-                        <div className="conn-node-satellite shadow-sm" data-status="connected" style={{ position: 'absolute', bottom: '20%', left: '20%', pointerEvents: 'auto' }}>
-                            <FileText size={24} className="conn-satellite-icon" />
-                            <span className="conn-satellite-label">Notion</span>
-                        </div>
-                        {/* Top Right */}
-                        <div className="conn-node-satellite shadow-sm" data-status="degraded" style={{ position: 'absolute', top: '20%', right: '20%', pointerEvents: 'auto' }}>
-                            <Search size={24} className="conn-satellite-icon" />
-                            <span className="conn-satellite-label">Firecrawl</span>
-                        </div>
-                        {/* Bottom Right */}
-                        <div className="conn-node-satellite shadow-sm" data-status="disconnected" style={{ position: 'absolute', bottom: '20%', right: '20%', pointerEvents: 'auto' }}>
-                            <HardDrive size={24} className="conn-satellite-icon" />
-                            <span className="conn-satellite-label">Pinecone</span>
-                        </div>
+                        {connections.map((conn, idx) => {
+                            const angle = (idx / connections.length) * 2 * Math.PI
+                            const left = 50 + 30 * Math.cos(angle)
+                            const top = 50 + 30 * Math.sin(angle)
+                            const Icon = getIcon(conn.id)
+
+                            return (
+                                <div
+                                    key={`node-${conn.id}`}
+                                    className="conn-node-satellite shadow-sm"
+                                    data-status={conn.status}
+                                    style={{
+                                        position: 'absolute',
+                                        top: `${top}%`,
+                                        left: `${left}%`,
+                                        pointerEvents: 'auto',
+                                        transform: 'translate(-50%, -50%)'
+                                    }}
+                                >
+                                    <Icon size={24} className="conn-satellite-icon" />
+                                    <span className="conn-satellite-label">{conn.name}</span>
+                                </div>
+                            )
+                        })}
                     </div>
                 </div>
             </section>
@@ -131,12 +164,12 @@ export default function ConnectionsPage() {
             {/* Integrations Grid */}
             <section>
                 <div className="conn-list-header">
-                    <h2 className="conn-list-title">Integraciones Activas</h2>
+                    <h2 className="conn-list-title">Integraciones Activas ({connections.length})</h2>
                 </div>
 
                 <div className="conn-grid">
                     {connections.map((conn) => {
-                        const Icon = conn.icon
+                        const Icon = getIcon(conn.id)
                         return (
                             <div key={conn.id} className="premium-card conn-card">
                                 <div className="conn-card-header">
@@ -160,11 +193,11 @@ export default function ConnectionsPage() {
                                 <div className="conn-card-metrics">
                                     <div className="conn-metric">
                                         <span className="conn-metric-label">Latency</span>
-                                        <span className="conn-metric-value">{conn.latency}</span>
+                                        <span className="conn-metric-value">{conn.metrics.latency}</span>
                                     </div>
                                     <div className="conn-metric">
                                         <span className="conn-metric-label">Last Sync</span>
-                                        <span className="conn-metric-value">{conn.lastSync}</span>
+                                        <span className="conn-metric-value">{conn.metrics.lastSync}</span>
                                     </div>
                                 </div>
                             </div>
@@ -175,3 +208,4 @@ export default function ConnectionsPage() {
         </div>
     )
 }
+

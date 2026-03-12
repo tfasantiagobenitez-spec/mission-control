@@ -1,0 +1,128 @@
+/* EmailControl.css */
+
+.agent-page-container {
+    min-height: 100vh;
+    background: radial-gradient(circle at top right, rgba(90, 156, 245, 0.05), transparent),
+        radial-gradient(circle at bottom left, rgba(229, 133, 15, 0.03), transparent),
+        #050505;
+    color: var(--text-primary);
+    padding: 2rem;
+}
+
+.glass-panel {
+    background: rgba(30, 30, 30, 0.4);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 2rem;
+    transition: all 0.3s ease;
+}
+
+.glass-panel:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(35, 35, 35, 0.5);
+}
+
+/* Sidebar / List */
+.email-list-container {
+    height: calc(100vh - 200px);
+    display: flex;
+    flex-direction: column;
+}
+
+.email-item {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.email-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--brand-blue);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.email-item.selected::before {
+    opacity: 1;
+}
+
+.email-item.selected {
+    background: rgba(90, 156, 245, 0.08);
+}
+
+.email-item:hover:not(.selected) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Intelligence Panel */
+.intel-panel {
+    background: linear-gradient(135deg, rgba(90, 156, 245, 0.05) 0%, rgba(13, 13, 13, 0.8) 100%);
+    border: 1px solid rgba(90, 156, 245, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.intel-panel::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(90, 156, 245, 0.03) 0%, transparent 70%);
+    pointer-events: none;
+    animation: slow-rotate 20s linear infinite;
+}
+
+@keyframes slow-rotate {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.ai-recommendation-box {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 1.5rem;
+    padding: 1.5rem;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+/* Category Badges */
+.badge-modern {
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.65rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid currentColor;
+}
+
+/* Utilities */
+.text-pretty {
+    text-wrap: pretty;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
