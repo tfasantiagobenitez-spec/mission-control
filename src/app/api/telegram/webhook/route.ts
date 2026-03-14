@@ -5,11 +5,18 @@ import { fetchGoogleCalendarEvents } from '@/lib/calendar-service'
 import { searchCRM } from '@/lib/crm/search'
 import { USER_CONTEXT } from '@/lib/user-context'
 import { agentOrchestrator } from '@/lib/agent'
+import { createClient } from '@supabase/supabase-js'
+import { createTask } from '@/lib/crm/clickup'
 import path from 'path'
 import os from 'os'
 import fsSync from 'fs'
 import fs from 'fs/promises'
 import OpenAI from 'openai'
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -26,6 +33,13 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json()
+
+        // Handle inline button callbacks (approve/reject from Fireflies pipeline)
+        if (body.callback_query) {
+            await processApprovalCallback(body.callback_query, token)
+            return NextResponse.json({ ok: true })
+        }
+
         const message = body.message
         if (!message || (!message.text && !message.voice)) {
             return NextResponse.json({ ok: true })
@@ -38,6 +52,81 @@ export async function POST(req: Request) {
     } catch (error) {
         console.error('Error handling Telegram webhook:', error)
         return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    }
+}
+
+async function processApprovalCallback(callbackQuery: any, token: string) {
+    const callbackData: string = callbackQuery.data || ''
+    const callbackQueryId: string = callbackQuery.id
+    const chatId: number = callbackQuery.message?.chat?.id
+    const messageId: number = callbackQuery.message?.message_id
+
+    const [action, reminderId] = callbackData.split(':')
+
+    if (!reminderId || !['approve', 'reject'].includes(action)) return
+
+    const { data: reminder } = await supabase
+        .from('crm_reminders')
+        .select('id, text, status, contact_id')
+        .eq('id', reminderId)
+        .single()
+
+    if (!reminder || reminder.status !== 'pending_approval') {
+        await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ callback_query_id: callbackQueryId, text: 'Ya fue procesado' })
+        })
+        return
+    }
+
+    if (action === 'approve') {
+        let clickupTaskId: string | null = null
+        try {
+            const { data: contact } = await supabase
+                .from('crm_contacts').select('full_name').eq('id', reminder.contact_id).single()
+            clickupTaskId = await createTask({
+                name: reminder.text,
+                description: contact?.full_name ? `Reunión con ${contact.full_name}` : undefined,
+                tags: ['crm', 'from-meeting']
+            })
+        } catch (err) {
+            console.error('[approval] ClickUp failed:', err)
+        }
+
+        await supabase.from('crm_reminders').update({
+            status: 'task_created', approved_at: new Date().toISOString(), clickup_task_id: clickupTaskId
+        }).eq('id', reminderId)
+
+        await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ callback_query_id: callbackQueryId, text: '✅ Tarea creada en ClickUp!' })
+        })
+
+        const taskUrl = clickupTaskId ? `\n🔗 https://app.clickup.com/t/${clickupTaskId}` : ''
+        await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, message_id: messageId, text: `✅ *Creado en ClickUp*\n"${reminder.text}"${taskUrl}`, parse_mode: 'Markdown' })
+        })
+
+    } else {
+        await supabase.from('crm_reminders').update({
+            status: 'rejected', rejected_at: new Date().toISOString()
+        }).eq('id', reminderId)
+
+        await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ callback_query_id: callbackQueryId, text: '❌ Rechazado' })
+        })
+
+        await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, message_id: messageId, text: `❌ *Rechazado*\n"${reminder.text}"`, parse_mode: 'Markdown' })
+        })
     }
 }
 
@@ -82,7 +171,9 @@ async function processMessageAsync(message: any, token: string) {
         }
     }
 
-    if (text === '/start') {
+    if (text === '/chatid') {
+        await sendTelegramMessage(chatId, `Tu Chat ID es: \`${chatId}\`\n\nAgregalo en .env.local como:\nTELEGRAM_CHAT_ID=${chatId}`, token)
+    } else if (text === '/start') {
         await sendTelegramMessage(chatId, "¡Hola! Soy tu asistente. Puedo leer tus correos, revisar tu agenda y responder preguntas sobre Arecco IA.", token)
     } else if (text === '/calendar') {
         const events = await fetchGoogleCalendarEvents(5)

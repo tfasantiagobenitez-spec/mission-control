@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@illuminaresolutions/n8n-mcp-server": "^1.0.1",
     "@pinecone-database/pinecone": "^7.1.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.97.0",
