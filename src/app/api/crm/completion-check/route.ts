@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     .update({ status: 'archived', updated_at: now.toISOString() })
     .in('status', ['task_created', 'rejected', 'waiting_on'])
     .lt('updated_at', archiveCutoff)
-    .select('id', { count: 'exact', head: true })
+    .select('id')
 
   // ── 2. Fetch active items for the summary report ───────────────────────────
   const { data: pending } = await supabase
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
   if (overdue && overdue.length > 0) {
     msg += `🔴 *Vencidas (${overdue.length}):*\n`
     overdue.forEach(r => {
-      const contact = (r.crm_contacts as { full_name: string } | null)?.full_name || '?'
+      const contact = (r.crm_contacts as unknown as { full_name: string } | null)?.full_name || '?'
       msg += `  • ${r.text} _(${contact})_\n`
     })
     msg += '\n'
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
   if (pending && pending.length > 0) {
     msg += `⏳ *Esperando aprobación (${pending.length}):*\n`
     pending.forEach(r => {
-      const contact = (r.crm_contacts as { full_name: string } | null)?.full_name || '?'
+      const contact = (r.crm_contacts as unknown as { full_name: string } | null)?.full_name || '?'
       msg += `  • ${r.text} _(${contact})_\n`
     })
     msg += '\n'
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
   if (waitingOn && waitingOn.length > 0) {
     msg += `👀 *Waiting on them (${waitingOn.length}):*\n`
     waitingOn.forEach(r => {
-      const contact = (r.crm_contacts as { full_name: string } | null)?.full_name || '?'
+      const contact = (r.crm_contacts as unknown as { full_name: string } | null)?.full_name || '?'
       msg += `  • ${r.text} _(${contact})_\n`
     })
     msg += '\n'
