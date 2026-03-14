@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import {
     Search, RefreshCw, CalculatorIcon, X, Mail, Calendar,
     Building2, Clock, Activity, Mic, Plus, Check, AlarmClock,
-    Briefcase, MessageSquare, Sparkles
+    Briefcase, MessageSquare, Sparkles, Video, Users, ExternalLink
 } from 'lucide-react'
 import './crm.css'
 
@@ -44,6 +44,26 @@ type Reminder = {
     due_date: string | null
     snoozed_until: string | null
     created_at: string
+}
+
+type ProcessedMeeting = {
+    id: string
+    fireflies_id: string
+    title: string | null
+    meeting_date: string
+    attendee_count: number
+    action_items_found: number
+    processed_at: string
+}
+
+type MeetingReminder = {
+    id: string
+    text: string
+    owner: 'mine' | 'theirs'
+    status: string
+    clickup_task_id: string | null
+    approved_at: string | null
+    rejected_at: string | null
 }
 
 type FilterTab = 'all' | 'healthy' | 'at-risk' | 'inactive'
@@ -97,6 +117,12 @@ export default function CRMPage() {
     const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
     const [loadingDetail, setLoadingDetail] = useState(false)
     const [newReminderText, setNewReminderText] = useState('')
+    // Meetings view
+    const [viewMode, setViewMode] = useState<'contacts' | 'meetings'>('contacts')
+    const [meetings, setMeetings] = useState<ProcessedMeeting[]>([])
+    const [loadingMeetings, setLoadingMeetings] = useState(false)
+    const [selectedMeeting, setSelectedMeeting] = useState<ProcessedMeeting | null>(null)
+    const [meetingReminders, setMeetingReminders] = useState<MeetingReminder[]>([])
 
     useEffect(() => { fetchContacts() }, [])
 
@@ -133,6 +159,37 @@ export default function CRMPage() {
     const openContact = (contact: Contact) => {
         setSelectedContact(contact)
         fetchDetail(contact.id)
+    }
+
+    const fetchMeetings = async () => {
+        setLoadingMeetings(true)
+        const { data } = await supabase
+            .from('crm_processed_meetings')
+            .select('*')
+            .order('meeting_date', { ascending: false })
+            .limit(50)
+        setMeetings(data || [])
+        setLoadingMeetings(false)
+    }
+
+    const openMeeting = async (meeting: ProcessedMeeting) => {
+        setSelectedMeeting(meeting)
+        const { data } = await supabase
+            .from('crm_reminders')
+            .select('id, text, owner, status, clickup_task_id, approved_at, rejected_at')
+            .eq('meeting_id', meeting.fireflies_id)
+            .order('owner')
+        setMeetingReminders(data || [])
+    }
+
+    const toggleMeetings = () => {
+        if (viewMode === 'contacts') {
+            setViewMode('meetings')
+            fetchMeetings()
+        } else {
+            setViewMode('contacts')
+            setSelectedMeeting(null)
+        }
     }
 
     const triggerSync = async () => {
@@ -231,6 +288,10 @@ export default function CRMPage() {
                     <p className="crm-subtitle">Gestión de relaciones y salud de contactos</p>
                 </div>
                 <div className="crm-actions">
+                    <button onClick={toggleMeetings} className={`crm-btn ${viewMode === 'meetings' ? 'crm-btn-primary' : 'crm-btn-ghost'}`}>
+                        <Video size={16} />
+                        {viewMode === 'meetings' ? '← Contactos' : 'Reuniones'}
+                    </button>
                     <button onClick={triggerRecalculate} disabled={recalculating} className="crm-btn crm-btn-ghost" title="Recalcular scores">
                         <CalculatorIcon size={16} />
                         {recalculating ? 'Calculando...' : 'Recalcular Scores'}
@@ -266,6 +327,110 @@ export default function CRMPage() {
                 </div>
             </div>
 
+            {viewMode === 'meetings' ? (
+                /* ===== MEETINGS VIEW ===== */
+                <div className="meetings-root">
+                    <div className="meetings-layout">
+                        {/* Meetings list */}
+                        <div className="meetings-list">
+                            {loadingMeetings ? (
+                                <div className="crm-loading"><div className="crm-spinner" /><p>Cargando reuniones...</p></div>
+                            ) : meetings.length === 0 ? (
+                                <div className="crm-empty">
+                                    <Video size={48} className="crm-empty-icon" />
+                                    <p>No hay reuniones procesadas aún.</p>
+                                    <p style={{fontSize:'12px',opacity:0.6}}>El pipeline procesa tus reuniones de Fireflies cada 5 min.</p>
+                                </div>
+                            ) : meetings.map(m => (
+                                <div
+                                    key={m.id}
+                                    className={`meeting-card ${selectedMeeting?.id === m.id ? 'selected' : ''}`}
+                                    onClick={() => openMeeting(m)}
+                                >
+                                    <div className="meeting-card-top">
+                                        <div className="meeting-icon"><Video size={16} /></div>
+                                        <div className="meeting-info">
+                                            <h3 className="meeting-title">{m.title || 'Reunión sin título'}</h3>
+                                            <span className="meeting-date">
+                                                {new Date(m.meeting_date).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="meeting-card-footer">
+                                        <span className="meeting-meta"><Users size={11} /> {m.attendee_count} asistentes</span>
+                                        <span className="meeting-meta"><Check size={11} /> {m.action_items_found} action items</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Meeting detail panel */}
+                        {selectedMeeting && (
+                            <div className="meeting-detail">
+                                <div className="meeting-detail-header">
+                                    <div>
+                                        <h2>{selectedMeeting.title || 'Reunión sin título'}</h2>
+                                        <p className="meeting-detail-date">
+                                            {new Date(selectedMeeting.meeting_date).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                                        </p>
+                                    </div>
+                                    <button className="crm-panel-close" onClick={() => setSelectedMeeting(null)}><X size={18} /></button>
+                                </div>
+
+                                <div className="meeting-detail-stats">
+                                    <span><Users size={13} /> {selectedMeeting.attendee_count} asistentes</span>
+                                    <span><Activity size={13} /> {selectedMeeting.action_items_found} action items encontrados</span>
+                                </div>
+
+                                {meetingReminders.length === 0 ? (
+                                    <p className="crm-no-interactions">Sin action items registrados.</p>
+                                ) : (
+                                    <div className="meeting-items">
+                                        {['mine', 'theirs'].map(owner => {
+                                            const items = meetingReminders.filter(r => r.owner === owner)
+                                            if (!items.length) return null
+                                            return (
+                                                <div key={owner} className="meeting-items-group">
+                                                    <h4 className="meeting-items-label">
+                                                        {owner === 'mine' ? '👤 Mis action items' : '👥 De ellos (waiting on)'}
+                                                    </h4>
+                                                    {items.map(r => (
+                                                        <div key={r.id} className="meeting-item">
+                                                            <p className="meeting-item-text">{r.text}</p>
+                                                            <div className="meeting-item-footer">
+                                                                <span className={`meeting-status-badge status-${r.status}`}>
+                                                                    {r.status === 'pending_approval' && '🕐 En Telegram'}
+                                                                    {r.status === 'task_created' && '✅ En ClickUp'}
+                                                                    {r.status === 'waiting_on' && '👁️ Esperando'}
+                                                                    {r.status === 'rejected' && '❌ Rechazado'}
+                                                                    {r.status === 'pending' && '⏳ Pendiente'}
+                                                                    {!['pending_approval','task_created','waiting_on','rejected','pending'].includes(r.status) && r.status}
+                                                                </span>
+                                                                {r.clickup_task_id && (
+                                                                    <a
+                                                                        href={`https://app.clickup.com/t/${r.clickup_task_id}`}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="meeting-clickup-link"
+                                                                    >
+                                                                        <ExternalLink size={11} /> ClickUp
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ) : (
+                /* ===== CONTACTS VIEW ===== */
+                <>
             {/* NL Search */}
             <div className="crm-nl-search">
                 <div className="crm-nl-icon"><Sparkles size={16} /></div>
@@ -349,6 +514,8 @@ export default function CRMPage() {
                         )
                     })}
                 </div>
+            )}
+                </>
             )}
 
             {/* Detail Panel */}
