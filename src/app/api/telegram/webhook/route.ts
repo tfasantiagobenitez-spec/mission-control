@@ -199,8 +199,9 @@ async function processMessageAsync(message: any, token: string) {
       const handle = text.replace('/sync_channel', '').trim() || '@AIDailyBrief'
       await sendTelegramMessage(chatId, `📺 Sincronizando canal *${handle}*...\nTe aviso cuando termine (puede tardar unos minutos).`, token)
       // Fire & forget — calls dedicated endpoint with high maxDuration to avoid webhook 30s timeout
-      const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_URL || 'https://mission-control-santi.vercel.app'
-      fetch(`${baseUrl}/api/knowledge/sync-channel`, {
+      // VERCEL_URL is auto-set by Vercel in production (without protocol), NEXTAUTH_URL used for local dev
+      const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : (process.env.NEXTAUTH_URL || 'http://localhost:3008')
+      fetch(`${vercelUrl}/api/knowledge/sync-channel`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
