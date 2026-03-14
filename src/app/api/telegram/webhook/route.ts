@@ -7,6 +7,9 @@ import { USER_CONTEXT } from '@/lib/user-context'
 import { agentOrchestrator } from '@/lib/agent'
 import { createClient } from '@supabase/supabase-js'
 import { createTask } from '@/lib/crm/clickup'
+import { ingestSource, detectSourceType } from '@/lib/knowledge/ingest'
+import { searchKnowledge, formatKnowledgeContext } from '@/lib/knowledge/search'
+import { syncYouTubeChannel } from '@/lib/knowledge/youtube-channel'
 import path from 'path'
 import os from 'os'
 import fsSync from 'fs'
@@ -171,6 +174,73 @@ async function processMessageAsync(message: any, token: string) {
         }
     }
 
+    // ── Knowledge Base Commands ──
+    if (text === '/kb' || text.startsWith('/kb ')) {
+      const query = text.replace('/kb', '').trim()
+      if (!query) {
+        await sendTelegramMessage(chatId, '🧠 Uso: `/kb [pregunta]`\nEj: `/kb qué es el AI Brief de hoy`', token)
+        return
+      }
+      await sendTelegramMessage(chatId, `🔍 Buscando en tu knowledge base...`, token)
+      const results = await searchKnowledge(query, 3)
+      if (results.length === 0) {
+        await sendTelegramMessage(chatId, '❌ No encontré nada relevante en tu knowledge base para esa búsqueda.', token)
+      } else {
+        let reply = `🧠 *Resultados para:* "${query}"\n\n`
+        results.forEach((r, i) => {
+          reply += `*[${i+1}] ${r.title || r.sourceUrl}*\n${r.text.slice(0, 300)}...\n\n`
+        })
+        await sendTelegramMessage(chatId, reply, token)
+      }
+      return
+    }
+
+    if (text === '/sync_channel' || text.startsWith('/sync_channel ')) {
+      const handle = text.replace('/sync_channel', '').trim() || '@AIDailyBrief'
+      await sendTelegramMessage(chatId, `📺 Sincronizando canal ${handle}... Esto puede tardar unos minutos.`, token)
+      try {
+        const result = await syncYouTubeChannel(handle, 20)
+        await sendTelegramMessage(chatId,
+          `✅ *Sync completado: ${result.channelName}*\n` +
+          `📥 Ingestados: ${result.ingested} videos\n` +
+          `⏭️ Ya existían: ${result.skipped}\n` +
+          `❌ Errores: ${result.errors.length}`,
+          token
+        )
+      } catch (err: any) {
+        await sendTelegramMessage(chatId, `❌ Error sincronizando canal: ${err.message}`, token)
+      }
+      return
+    }
+
+    // ── Auto-ingest URLs ──
+    const originalText = message.text || text
+    const urlMatch = originalText.match(/https?:\/\/[^\s]+/)
+    if (urlMatch && !message.voice) {
+      const url = urlMatch[0]
+      const type = detectSourceType(url)
+      if (type === 'youtube' || type === 'article') {
+        await sendTelegramMessage(chatId, `⏳ Ingresando a tu knowledge base...`, token)
+        try {
+          const result = await ingestSource(url, type)
+          if (result.alreadyExists) {
+            await sendTelegramMessage(chatId, `ℹ️ Ya estaba en tu KB: *${result.title}*`, token)
+          } else {
+            await sendTelegramMessage(chatId,
+              `✅ *Agregado a tu Knowledge Base*\n` +
+              `📄 ${result.title}\n` +
+              `🔢 ${result.chunkCount} fragmentos indexados\n` +
+              `💡 ${result.summary}`,
+              token
+            )
+          }
+        } catch (err: any) {
+          await sendTelegramMessage(chatId, `⚠️ No pude ingestar la URL: ${err.message}`, token)
+        }
+        return
+      }
+    }
+
     if (text === '/chatid') {
         await sendTelegramMessage(chatId, `Tu Chat ID es: \`${chatId}\`\n\nAgregalo en .env.local como:\nTELEGRAM_CHAT_ID=${chatId}`, token)
     } else if (text === '/start') {
@@ -188,12 +258,13 @@ async function processMessageAsync(message: any, token: string) {
         await sendTelegramMessage(chatId, messageText, token)
     } else {
         try {
-            // Fetch live context - concurrent with memory load
-            const [recentEmails, upcomingEvents, crmContacts, memoryContext] = await Promise.all([
+            // Fetch live context - concurrent with memory load + knowledge base
+            const [recentEmails, upcomingEvents, crmContacts, memoryContext, knowledgeResults] = await Promise.all([
                 fetchRecentEmails(5).catch(() => []),
                 fetchGoogleCalendarEvents(5).catch(() => []),
                 searchCRM(text, 3).catch(() => []),
-                agentOrchestrator.loadMemory(text).catch(() => ({ coreFacts: [], recentMessages: [], semanticMatches: [], conversationSummary: undefined }))
+                agentOrchestrator.loadMemory(text).catch(() => ({ coreFacts: [], recentMessages: [], semanticMatches: [], conversationSummary: undefined })),
+                searchKnowledge(text, 3).catch(() => [])
             ])
 
             let liveContext = `\n\n=== MEMORIA Y CONTEXTO ===\n`
@@ -237,8 +308,12 @@ async function processMessageAsync(message: any, token: string) {
                 })
             }
 
+            // Inject knowledge base context if relevant results found
+            const kbContext = formatKnowledgeContext(knowledgeResults)
+            if (kbContext) liveContext += kbContext
+
             liveContext += `=============================\n`
-            liveContext += `Usa la memoria y el contexto en tiempo real para ser lo más preciso posible. Si Santi pregunta por algo que ya te dijo, demostrá que lo recordás.`
+            liveContext += `Usa la memoria y el contexto en tiempo real para ser lo más preciso posible. Si Santi pregunta por algo que ya te dijo, demostrá que lo recordás. Si hay contexto de la Knowledge Base, usalo activamente en tu respuesta y citá la fuente.`
 
             const messages: ChatMessage[] = [
                 {

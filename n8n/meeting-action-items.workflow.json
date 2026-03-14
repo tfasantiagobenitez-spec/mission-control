@@ -1,0 +1,157 @@
+{
+  "name": "Meeting Action Items Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 5 }]
+        }
+      },
+      "id": "trigger-poll",
+      "name": "Every 5 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "day-check",
+              "leftValue": "={{ $now.weekday() }}",
+              "rightValue": 6,
+              "operator": { "type": "number", "operation": "lt" }
+            },
+            {
+              "id": "hour-min",
+              "leftValue": "={{ $now.setZone('America/Argentina/Buenos_Aires').hour }}",
+              "rightValue": 7,
+              "operator": { "type": "number", "operation": "gte" }
+            },
+            {
+              "id": "hour-max",
+              "leftValue": "={{ $now.setZone('America/Argentina/Buenos_Aires').hour }}",
+              "rightValue": 20,
+              "operator": { "type": "number", "operation": "lt" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-business-hours",
+      "name": "Business hours? (Mon–Fri 7–20 ARG)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MISSION_CONTROL_URL }}/api/crm/process-new-meetings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 55000,
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "call-process-meetings",
+      "name": "Process New Meetings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 0],
+      "credentials": {
+        "httpHeaderAuth": { "id": "mission-control-auth", "name": "Mission Control Token" }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 11 * * 1-5" }
+          ]
+        }
+      },
+      "id": "trigger-check-morning",
+      "name": "8am ARG (UTC 11)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 260]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 15 * * 1-5" }
+          ]
+        }
+      },
+      "id": "trigger-check-noon",
+      "name": "12pm ARG (UTC 15)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 400]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 19 * * 1-5" }
+          ]
+        }
+      },
+      "id": "trigger-check-afternoon",
+      "name": "4pm ARG (UTC 19)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 540]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MISSION_CONTROL_URL }}/api/crm/completion-check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 25000,
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "call-completion-check",
+      "name": "Completion Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 400],
+      "credentials": {
+        "httpHeaderAuth": { "id": "mission-control-auth", "name": "Mission Control Token" }
+      }
+    }
+  ],
+  "connections": {
+    "Every 5 min": {
+      "main": [[{ "node": "Business hours? (Mon–Fri 7–20 ARG)", "type": "main", "index": 0 }]]
+    },
+    "Business hours? (Mon–Fri 7–20 ARG)": {
+      "main": [[{ "node": "Process New Meetings", "type": "main", "index": 0 }], []]
+    },
+    "8am ARG (UTC 11)": {
+      "main": [[{ "node": "Completion Check", "type": "main", "index": 0 }]]
+    },
+    "12pm ARG (UTC 15)": {
+      "main": [[{ "node": "Completion Check", "type": "main", "index": 0 }]]
+    },
+    "4pm ARG (UTC 19)": {
+      "main": [[{ "node": "Completion Check", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [{ "name": "crm" }, { "name": "fireflies" }],
+  "pinData": {}
+}
