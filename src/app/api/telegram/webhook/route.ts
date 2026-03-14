@@ -197,19 +197,17 @@ async function processMessageAsync(message: any, token: string) {
 
     if (text === '/sync_channel' || text.startsWith('/sync_channel ')) {
       const handle = text.replace('/sync_channel', '').trim() || '@AIDailyBrief'
-      await sendTelegramMessage(chatId, `📺 Sincronizando canal ${handle}... Esto puede tardar unos minutos.`, token)
-      try {
-        const result = await syncYouTubeChannel(handle, 20)
-        await sendTelegramMessage(chatId,
-          `✅ *Sync completado: ${result.channelName}*\n` +
-          `📥 Ingestados: ${result.ingested} videos\n` +
-          `⏭️ Ya existían: ${result.skipped}\n` +
-          `❌ Errores: ${result.errors.length}`,
-          token
-        )
-      } catch (err: any) {
-        await sendTelegramMessage(chatId, `❌ Error sincronizando canal: ${err.message}`, token)
-      }
+      await sendTelegramMessage(chatId, `📺 Sincronizando canal *${handle}*...\nTe aviso cuando termine (puede tardar unos minutos).`, token)
+      // Fire & forget — calls dedicated endpoint with high maxDuration to avoid webhook 30s timeout
+      const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_URL || 'https://mission-control-santi.vercel.app'
+      fetch(`${baseUrl}/api/knowledge/sync-channel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.INTERNAL_API_TOKEN}`
+        },
+        body: JSON.stringify({ channel: handle, maxVideos: 20, chatId })
+      }).catch(err => console.error('[sync_channel] fire-and-forget error:', err))
       return
     }
 
