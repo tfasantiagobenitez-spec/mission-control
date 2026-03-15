@@ -6,7 +6,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { Pinecone } from '@pinecone-database/pinecone'
-import { addUrlToKBNotebook, addTextToKBNotebook } from './notebooklm'
+
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -203,19 +203,6 @@ export async function ingestSource(
     chunk_count: chunks.length,
     summary
   })
-
-  // ── Sync to NotebookLM (non-blocking) ──
-  void (async () => {
-    try {
-      if (detectedType === 'youtube' || detectedType === 'article') {
-        await addUrlToKBNotebook(input)
-      } else {
-        await addTextToKBNotebook(title, text)
-      }
-    } catch (e: any) {
-      console.error('[NotebookLM] Sync failed, continuing without it:', e?.message)
-    }
-  })()
 
   return { sourceId, title, chunkCount: chunks.length, summary, alreadyExists: false }
 }
