@@ -3,24 +3,28 @@
  * POST /api/knowledge/sync-channel
  * Body: { channel: string, maxVideos?: number, chatId?: number }
  *
- * This endpoint runs the long sync operation outside the Telegram webhook timeout.
- * The webhook fires & forgets this endpoint, which then sends results via Telegram.
+ * Uses Next.js `after()` to run the sync AFTER the HTTP response is sent.
+ * This keeps the serverless function alive past the response without blocking the caller.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { syncYouTubeChannel } from '@/lib/knowledge/youtube-channel'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 300 // 5 minutes — enough for large channel syncs
+export const maxDuration = 300 // 5 minutes (Vercel Pro) — use 60 for Hobby
 
 const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`
 
 async function sendTelegram(chatId: number, text: string) {
-  await fetch(`${TELEGRAM_API}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' })
-  })
+  try {
+    await fetch(`${TELEGRAM_API}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' })
+    })
+  } catch (e) {
+    console.error('[sync-channel] Telegram send failed:', e)
+  }
 }
 
 function checkAuth(req: NextRequest): boolean {
@@ -39,11 +43,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'channel is required' }, { status: 400 })
   }
 
-  // Respond immediately so the caller doesn't timeout waiting
-  // The sync runs and reports back via Telegram
-  const syncPromise = (async () => {
+  console.log(`[sync-channel] Starting sync for ${channel}, maxVideos=${maxVideos}, chatId=${chatId}`)
+
+  // `after()` runs the callback AFTER the response is sent.
+  // Vercel keeps the serverless function alive until the callback completes.
+  after(async () => {
+    console.log(`[sync-channel] after() running for ${channel}`)
     try {
       const result = await syncYouTubeChannel(channel, maxVideos)
+      console.log(`[sync-channel] Sync done: ingested=${result.ingested}, skipped=${result.skipped}`)
       if (chatId) {
         await sendTelegram(chatId,
           `✅ *Sync completado: ${result.channelName}*\n` +
@@ -53,14 +61,15 @@ export async function POST(req: NextRequest) {
         )
       }
     } catch (err: any) {
+      console.error(`[sync-channel] Error:`, err.message)
       if (chatId) {
-        await sendTelegram(chatId, `❌ Error sincronizando ${channel}: ${err.message}`)
+        await sendTelegram(chatId, `❌ Error sincronizando *${channel}*: ${err.message}`)
       }
     }
-  })()
+  })
 
-  // Don't await — fire and forget, return immediately
-  syncPromise.catch(console.error)
-
-  return NextResponse.json({ ok: true, message: `Syncing ${channel} in background...` })
+  return NextResponse.json({
+    ok: true,
+    message: `Syncing ${channel} in background... You'll receive a Telegram message when done.`
+  })
 }
