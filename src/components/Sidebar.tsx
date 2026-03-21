@@ -11,7 +11,8 @@ import {
     Link as LinkIcon,
     Settings,
     Activity,
-    Users
+    Users,
+    Sparkles
 } from 'lucide-react'
 import './Sidebar.css'
 
@@ -21,6 +22,7 @@ export function Sidebar() {
     const links = [
         { href: '/', label: 'Command Center', icon: LayoutDashboard },
         { href: '/agents', label: 'Agents', icon: Brain },
+        { href: '/agents/advisory-council', label: 'AI Advisory Council', icon: Sparkles },
         { href: '/productivity', label: 'Productivity', icon: Target },
         { href: '/tasks', label: 'Tasks', icon: CheckSquare },
         { href: '/content-intel', label: 'Content Intel', icon: BarChart2 },
@@ -56,7 +58,7 @@ export function Sidebar() {
                 <ul>
                     {links.map((link) => {
                         const Icon = link.icon
-                        const isActive = pathname === link.href || (pathname.startsWith(link.href) && link.href !== '/')
+                        const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href) && (pathname.length === link.href.length || pathname[link.href.length] === '/'))
 
                         return (
                             <li key={link.href}>

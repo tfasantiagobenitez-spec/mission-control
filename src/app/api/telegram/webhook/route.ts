@@ -10,6 +10,7 @@ import { createTask } from '@/lib/crm/clickup'
 import { ingestSource, detectSourceType } from '@/lib/knowledge/ingest'
 import { searchKnowledge, formatKnowledgeContext } from '@/lib/knowledge/search'
 import { syncYouTubeChannel } from '@/lib/knowledge/youtube-channel'
+import { queryKBNotebook } from '@/lib/knowledge/notebooklm'
 import path from 'path'
 import os from 'os'
 import fsSync from 'fs'
@@ -174,6 +175,19 @@ async function processMessageAsync(message: any, token: string) {
         }
     }
 
+    // ── NotebookLM Query ──
+    if (text === '/nb' || text.startsWith('/nb ')) {
+      const query = text.replace('/nb', '').trim()
+      if (!query) {
+        await sendTelegramMessage(chatId, '🧠 Uso: `/nb [pregunta]`\nEj: `/nb qué avanzamos con el proyecto de drones`', token)
+        return
+      }
+      await sendTelegramMessage(chatId, `🔍 Consultando NotebookLM...`, token)
+      const answer = await queryKBNotebook(query)
+      await sendTelegramMessage(chatId, answer ? `🧠 *NotebookLM:*\n\n${answer}` : '❌ Sin respuesta de NotebookLM', token)
+      return
+    }
+
     // ── Knowledge Base Commands ──
     if (text === '/kb' || text.startsWith('/kb ')) {
       const query = text.replace('/kb', '').trim()
@@ -192,6 +206,30 @@ async function processMessageAsync(message: any, token: string) {
         })
         await sendTelegramMessage(chatId, reply, token)
       }
+      return
+    }
+
+    // ── Advisory Council Command ──
+    // Usage: /advisory [project name]
+    // Example: /advisory Arecco IA
+    if (text === '/advisory' || text.startsWith('/advisory ')) {
+      const project = message.text?.replace(/^\/advisory\s*/i, '').trim() || 'General'
+      await sendTelegramMessage(chatId, `🧠 Iniciando AI Advisory Council para <b>${project}</b>...\n\nEsto puede tardar 30-60 segundos.`, token)
+
+      // Fire and forget — runs in background, sends Telegram message when done
+      const baseUrl = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : (process.env.NEXTAUTH_URL || 'http://localhost:3008')
+
+      fetch(`${baseUrl}/api/advisory/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.INTERNAL_API_TOKEN}`,
+        },
+        body: JSON.stringify({ project, sendToTelegram: true, logDecisions: true }),
+      }).catch(err => console.error('[advisory] fire-and-forget error:', err))
+
       return
     }
 
@@ -286,6 +324,13 @@ async function processMessageAsync(message: any, token: string) {
                 liveContext += `\n**Resumen de la sesión:** ${memoryContext.conversationSummary}\n`
             }
 
+            if (memoryContext.recentMessages?.length > 0) {
+                liveContext += `\n**Conversaciones recientes (últimos mensajes):**\n`
+                memoryContext.recentMessages.slice(-10).forEach((m: any) => {
+                    liveContext += `[${m.role === 'user' ? 'Santi' : 'Asistente'}]: ${m.content.slice(0, 200)}\n`
+                })
+            }
+
             liveContext += `\n**Correos recientes:**\n`
             if (recentEmails.length > 0) {
                 recentEmails.forEach((e: any) => {
@@ -328,6 +373,9 @@ async function processMessageAsync(message: any, token: string) {
             const completion = await chatCompletion({ messages, temperature: 0.7 })
             const aiResponse = completion.choices[0]?.message?.content || "No pude procesar la respuesta."
             await sendTelegramMessage(chatId, aiResponse, token)
+
+            // Save to Supabase memory + extract facts (fire-and-forget)
+            agentOrchestrator.processBackgroundTasks(text, aiResponse)
         } catch (aiError: any) {
             console.error('AI Processing Error:', aiError)
             await sendTelegramMessage(chatId, `⚠️ Error en IA: ${aiError.message || "Desconocido"}`, token)
