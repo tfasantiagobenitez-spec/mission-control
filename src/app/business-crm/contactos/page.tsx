@@ -32,16 +32,28 @@ export default function ContactosPage() {
     const [contacts, setContacts] = useState<Contact[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         const params = new URLSearchParams()
         if (search) params.set('q', search)
 
         setLoading(true)
+        setError(null)
         fetch(`/api/business-crm/contacts?${params}`)
             .then(r => r.json())
-            .then(d => { setContacts(Array.isArray(d) ? d : []); setLoading(false) })
-            .catch(() => setLoading(false))
+            .then(d => {
+                if (Array.isArray(d)) {
+                    setContacts(d)
+                } else if (d?.error) {
+                    setError(d.error)
+                    setContacts([])
+                } else {
+                    setContacts([])
+                }
+                setLoading(false)
+            })
+            .catch(e => { setError(String(e)); setLoading(false) })
     }, [search])
 
     return (
@@ -75,10 +87,16 @@ export default function ContactosPage() {
                         <div key={i} className="bg-slate-800/40 border border-slate-700/50 rounded-xl h-28 animate-pulse" />
                     ))}
                 </div>
+            ) : error ? (
+                <div className="text-center py-20">
+                    <UserCheck size={40} className="mx-auto mb-3 opacity-30 text-red-400" />
+                    <p className="text-red-400 text-sm font-medium mb-1">Error al cargar contactos</p>
+                    <p className="text-slate-500 text-xs font-mono max-w-lg mx-auto">{error}</p>
+                </div>
             ) : contacts.length === 0 ? (
                 <div className="text-center py-20 text-slate-500">
                     <UserCheck size={40} className="mx-auto mb-3 opacity-30" />
-                    <p>No hay contactos{search ? ` para "${search}"` : ''}.</p>
+                    <p>No hay contactos{search ? ` para "${search}"` : ''} en el CRM.</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -38,12 +38,22 @@ export default function ProyectosPage() {
     const [projects, setProjects] = useState<Project[]>([])
     const [loading, setLoading] = useState(true)
     const [statusFilter, setStatusFilter] = useState('all')
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         fetch('/api/business-crm/projects')
             .then(r => r.json())
-            .then(d => { setProjects(Array.isArray(d) ? d : []); setLoading(false) })
-            .catch(() => setLoading(false))
+            .then(d => {
+                if (Array.isArray(d)) {
+                    setProjects(d)
+                } else if (d?.error) {
+                    setError(d.error)
+                } else {
+                    setProjects([])
+                }
+                setLoading(false)
+            })
+            .catch(e => { setError(String(e)); setLoading(false) })
     }, [])
 
     const filtered = statusFilter === 'all' ? projects : projects.filter(p => p.status === statusFilter)
@@ -92,6 +102,12 @@ export default function ProyectosPage() {
                     {Array.from({ length: 4 }).map((_, i) => (
                         <div key={i} className="bg-slate-800/40 border border-slate-700/50 rounded-xl h-40 animate-pulse" />
                     ))}
+                </div>
+            ) : error ? (
+                <div className="text-center py-20">
+                    <FolderOpen size={40} className="mx-auto mb-3 opacity-30 text-red-400" />
+                    <p className="text-red-400 text-sm font-medium mb-1">Error al cargar proyectos</p>
+                    <p className="text-slate-500 text-xs font-mono max-w-lg mx-auto">{error}</p>
                 </div>
             ) : filtered.length === 0 ? (
                 <div className="text-center py-20 text-slate-500">
