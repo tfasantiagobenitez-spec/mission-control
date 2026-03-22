@@ -34,6 +34,18 @@ export interface RunCouncilOptions {
  *
  * Returns the full CouncilResult for programmatic use.
  */
+async function sendTelegramError(project: string, err: unknown) {
+    const token = process.env.TELEGRAM_BOT_TOKEN
+    const chatId = process.env.TELEGRAM_CHAT_ID
+    if (!token || !chatId) return
+    const msg = `❌ <b>Advisory falló para "${project}"</b>\n${String(err).slice(0, 300)}`
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'HTML' }),
+    }).catch(() => {})
+}
+
 export async function runCouncil(options: RunCouncilOptions): Promise<CouncilResult> {
     const {
         project,
@@ -47,7 +59,9 @@ export async function runCouncil(options: RunCouncilOptions): Promise<CouncilRes
 
     console.log(`[advisory/council] ── Starting council run ${runId} for project: "${project}" ──`)
 
-    // Step 1: Build context
+    try {
+
+    // Step 1: Build context (sin Pinecone para evitar timeout)
     console.log('[advisory/council] Step 1/4: Building project context...')
     const context = await buildProjectContext(project)
 
@@ -118,4 +132,10 @@ export async function runCouncil(options: RunCouncilOptions): Promise<CouncilRes
     if (storeError) console.error('[advisory/council] data_store persist failed:', storeError)
 
     return result
+
+    } catch (err) {
+        console.error('[advisory/council] Fatal error:', err)
+        await sendTelegramError(project, err)
+        throw err
+    }
 }

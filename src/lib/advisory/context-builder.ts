@@ -67,7 +67,7 @@ export async function buildProjectContext(project: string): Promise<ProjectConte
             .order('created_at', { ascending: false })
             .limit(30),
 
-        searchKnowledge(`${project} strategy growth risks revenue`, 8).catch(() => []),
+        Promise.resolve([] as { text: string; title: string; sourceUrl: string; score: number }[]), // Pinecone desactivado para evitar timeout
 
         fetchCRMData(),
     ])
