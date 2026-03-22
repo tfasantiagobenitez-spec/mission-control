@@ -7,6 +7,14 @@
     {
       "path": "/api/cron/advisory",
       "schedule": "30 11 * * *"
+    },
+    {
+      "path": "/api/cron/pipeline-review",
+      "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/cron/meeting-brief",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
