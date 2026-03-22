@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/meeting-brief",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 11 * * *"
     }
   ]
 }
