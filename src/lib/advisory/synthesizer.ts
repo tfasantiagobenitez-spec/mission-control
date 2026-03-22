@@ -21,40 +21,40 @@ export async function synthesizeCouncilOutputs(
         })
         .join('\n\n---\n\n')
 
-    const prompt = `You are the Chief Synthesis Officer of an AI Advisory Council.
+    const prompt = `Sos el Director de Síntesis de un Consejo Asesor de IA.
 
-You have received analysis from 6 specialized agents about the project: "${project}"
+Recibiste el análisis de 6 agentes especializados sobre el proyecto: "${project}"
 
-Here are all their outputs:
+Estos son todos sus outputs:
 
 ${combinedText}
 
 ---
 
-Your task: synthesize everything into a single, actionable council report.
+Tu tarea: sintetizar todo en un único informe accionable del consejo, en español.
 
-Rules:
-- Deduplicate: if multiple agents say similar things, merge them into one clear item
-- Rank: put the highest-impact items first
-- Be specific: no generic advice
-- Health score: rate project health from 1 (critical) to 10 (excellent) based on all evidence
+Reglas:
+- Desduplicar: si varios agentes dicen cosas similares, unificálas en un solo ítem claro
+- Rankear: los ítems de mayor impacto primero
+- Ser específico: sin consejos genéricos
+- Health score: evaluá la salud del proyecto de 1 (crítico) a 10 (excelente) basándote en toda la evidencia
 
-Respond ONLY with valid JSON in this exact format:
+Respondé SOLO con JSON válido en este formato exacto:
 {
-  "top_actions": ["action 1", "action 2", "action 3", "action 4", "action 5"],
-  "risks": ["risk 1", "risk 2", "risk 3"],
-  "opportunities": ["opportunity 1", "opportunity 2", "opportunity 3"],
-  "strategic_direction": "One paragraph describing the recommended strategic direction for the project.",
+  "top_actions": ["acción 1", "acción 2", "acción 3", "acción 4", "acción 5"],
+  "risks": ["riesgo 1", "riesgo 2", "riesgo 3"],
+  "opportunities": ["oportunidad 1", "oportunidad 2", "oportunidad 3"],
+  "strategic_direction": "Un párrafo describiendo la dirección estratégica recomendada para el proyecto.",
   "project_health_score": 7
 }
 
-Requirements:
-- top_actions: 3-6 items, ranked by impact, each actionable
-- risks: 3-5 items, each specific and labeled (High/Medium/Low)
-- opportunities: 3-5 items, each specific
-- strategic_direction: 2-4 sentences, clear and directional
-- project_health_score: integer 1-10
-- JSON only, no extra text`
+Requisitos:
+- top_actions: 3-6 ítems, rankeados por impacto, cada uno accionable
+- risks: 3-5 ítems, cada uno específico y etiquetado (Alta/Media/Baja)
+- opportunities: 3-5 ítems, cada uno específico
+- strategic_direction: 2-4 oraciones, clara y direccional
+- project_health_score: entero del 1 al 10
+- Solo JSON, sin texto extra, todo en español`
 
     try {
         const result = await chatCompletion({

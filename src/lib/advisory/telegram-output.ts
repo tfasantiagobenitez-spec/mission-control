@@ -36,22 +36,22 @@ export function formatCouncilMessage(result: CouncilResult): string {
     })
 
     return [
-        `🧠 <b>AI Advisory Council — ${project}</b>`,
+        `🧠 <b>Consejo Asesor IA — ${project}</b>`,
         `📅 ${date}`,
         ``,
-        `📌 <b>Top Actions:</b>`,
+        `📌 <b>Acciones Prioritarias:</b>`,
         topActions,
         ``,
-        `⚠️ <b>Risks:</b>`,
+        `⚠️ <b>Riesgos:</b>`,
         risks,
         ``,
-        `🚀 <b>Opportunities:</b>`,
+        `🚀 <b>Oportunidades:</b>`,
         opportunities,
         ``,
-        `🧭 <b>Strategic Direction:</b>`,
+        `🧭 <b>Dirección Estratégica:</b>`,
         synthesis.strategic_direction,
         ``,
-        `${scoreEmoji} <b>Health Score: ${score}/10</b>`,
+        `${scoreEmoji} <b>Salud del Proyecto: ${score}/10</b>`,
     ].join('\n')
 }
 
