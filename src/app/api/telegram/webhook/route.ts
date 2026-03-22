@@ -137,7 +137,8 @@ async function processApprovalCallback(callbackQuery: any, token: string) {
 
 async function processMessageAsync(message: any, token: string) {
     const chatId = message.chat.id
-    let text = message.text ? message.text.toLowerCase() : ''
+    // Normalize: lowercase + trim + strip bot username suffix (e.g. /leads@botname → /leads)
+    let text = message.text ? message.text.toLowerCase().trim().replace(/@\w+$/, '').trim() : ''
 
     if (message.voice) {
         try {
@@ -280,6 +281,11 @@ async function processMessageAsync(message: any, token: string) {
     }
 
     // ── CRM Commands ──────────────────────────────────────────────────────────
+    // Debug: log what command arrived
+    if (text.startsWith('/')) {
+        console.log(`[webhook] Command received: "${text}" (original: "${message.text}")`)
+    }
+
     if (text === '/status') {
         const crm = getCRMClient()
         const [clientsRes, leadsRes, dealsRes, projectsRes] = await Promise.all([
