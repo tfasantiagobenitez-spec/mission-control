@@ -167,3 +167,19 @@
     background: linear-gradient(90deg, var(--brand-blue), var(--brand-orange));
     border-radius: 3px;
 }
+
+/* Business CRM sub-nav */
+.nav-link-sub {
+    font-size: 12px !important;
+    padding: 6px 10px !important;
+    opacity: 0.85;
+}
+
+.nav-link-sub .nav-icon {
+    width: 16px !important;
+    height: 16px !important;
+}
+
+.nav-link-sub.active {
+    opacity: 1;
+}
