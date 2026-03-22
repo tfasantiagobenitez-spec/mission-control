@@ -11,6 +11,7 @@ import { ingestSource, detectSourceType } from '@/lib/knowledge/ingest'
 import { searchKnowledge, formatKnowledgeContext } from '@/lib/knowledge/search'
 import { syncYouTubeChannel } from '@/lib/knowledge/youtube-channel'
 import { queryKBNotebook } from '@/lib/knowledge/notebooklm'
+import { getCRMClient } from '@/lib/crm/business-client'
 import path from 'path'
 import os from 'os'
 import fsSync from 'fs'
@@ -278,10 +279,132 @@ async function processMessageAsync(message: any, token: string) {
       }
     }
 
+    // ── CRM Commands ──────────────────────────────────────────────────────────
+    if (text === '/status') {
+        const crm = getCRMClient()
+        const [clientsRes, leadsRes, dealsRes, projectsRes] = await Promise.all([
+            crm.from('clients').select('id, status'),
+            crm.from('leads').select('id, status'),
+            crm.from('deals').select('id, value, updated_at'),
+            crm.from('projects').select('id, status'),
+        ])
+        const clients = clientsRes.data || []
+        const leads = leadsRes.data || []
+        const deals = dealsRes.data || []
+        const projects = projectsRes.data || []
+        const pipeline = deals.reduce((s, d) => s + (Number(d.value) || 0), 0)
+        const activeLeads = leads.filter(l => !['converted', 'unqualified'].includes(l.status))
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        const staleDeals = deals.filter(d => d.updated_at < sevenDaysAgo)
+        const msg = [
+            `📊 *Estado del negocio — Arecco IA*`,
+            ``,
+            `💰 Pipeline: $${pipeline.toLocaleString()}`,
+            `🤝 Clientes activos: ${clients.filter(c => c.status === 'active').length}`,
+            `🎯 Leads en curso: ${activeLeads.length}`,
+            `📁 Proyectos activos: ${projects.filter(p => p.status === 'active' || p.status === 'pending').length}`,
+            staleDeals.length > 0 ? `⚠️ Deals sin mover: ${staleDeals.length}` : `✅ Pipeline al día`,
+        ].join('\n')
+        await sendTelegramMessage(chatId, msg, token)
+        return
+    }
+
+    if (text === '/leads') {
+        const crm = getCRMClient()
+        const { data: leads } = await crm
+            .from('leads')
+            .select('first_name, last_name, company, status, source, created_at')
+            .not('status', 'in', '("converted","unqualified")')
+            .order('created_at', { ascending: false })
+            .limit(10)
+        if (!leads || leads.length === 0) {
+            await sendTelegramMessage(chatId, '✅ No hay leads activos en este momento.', token)
+            return
+        }
+        const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+        let msg = `🎯 *Leads activos (${leads.length}):*\n\n`
+        leads.forEach(l => {
+            const days = Math.floor((Date.now() - new Date(l.created_at).getTime()) / 86400000)
+            const stale = l.created_at < threeDaysAgo ? ' ⚠️' : ''
+            msg += `• *${l.first_name} ${l.last_name ?? ''}*${l.company ? ` — ${l.company}` : ''}\n`
+            msg += `  ${l.status} · ${l.source} · ${days}d${stale}\n`
+        })
+        await sendTelegramMessage(chatId, msg, token)
+        return
+    }
+
+    if (text === '/pipeline') {
+        const crm = getCRMClient()
+        const { data: deals } = await crm
+            .from('deals')
+            .select('title, value, currency, probability, updated_at, deal_stages(name)')
+            .order('value', { ascending: false })
+            .limit(10)
+        if (!deals || deals.length === 0) {
+            await sendTelegramMessage(chatId, 'No hay deals en el pipeline.', token)
+            return
+        }
+        const total = deals.reduce((s, d) => s + (Number(d.value) || 0), 0)
+        const weighted = deals.reduce((s, d) => s + (Number(d.value) || 0) * ((Number(d.probability) || 0) / 100), 0)
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        let msg = `📈 *Pipeline — $${total.toLocaleString()} total*\n`
+        msg += `⚖️ Ponderado: $${Math.round(weighted).toLocaleString()}\n\n`
+        deals.forEach(d => {
+            const stageData = d.deal_stages as unknown as { name: string } | null
+            const stage = stageData?.name ?? '?'
+            const days = Math.floor((Date.now() - new Date(d.updated_at).getTime()) / 86400000)
+            const stale = d.updated_at < sevenDaysAgo ? ' ⚠️' : ''
+            msg += `• *${d.title}*\n  $${Number(d.value).toLocaleString()} · ${stage} · ${days}d${stale}\n`
+        })
+        await sendTelegramMessage(chatId, msg, token)
+        return
+    }
+
+    if (text === '/proyectos') {
+        const crm = getCRMClient()
+        const { data: projects } = await crm
+            .from('projects')
+            .select('name, status, description, updated_at')
+            .in('status', ['active', 'pending'])
+            .order('updated_at', { ascending: false })
+            .limit(10)
+        if (!projects || projects.length === 0) {
+            await sendTelegramMessage(chatId, 'No hay proyectos activos.', token)
+            return
+        }
+        let msg = `📁 *Proyectos activos (${projects.length}):*\n\n`
+        projects.forEach(p => {
+            const days = Math.floor((Date.now() - new Date(p.updated_at).getTime()) / 86400000)
+            const stale = days > 7 ? ' ⚠️' : ''
+            msg += `• *${p.name}* [${p.status}] · ${days}d${stale}\n`
+            if (p.description) msg += `  ${p.description.slice(0, 80)}\n`
+        })
+        await sendTelegramMessage(chatId, msg, token)
+        return
+    }
+
+    if (text === '/ayuda' || text === '/help') {
+        const msg = [
+            `🤖 *Mission Control — Comandos*`,
+            ``,
+            `📊 */status* — KPIs del negocio`,
+            `🎯 */leads* — Leads activos`,
+            `📈 */pipeline* — Deals en curso`,
+            `📁 */proyectos* — Proyectos activos`,
+            `📅 */calendar* — Próximos eventos`,
+            `🧠 */advisory [proyecto]* — Advisory Council`,
+            `🔍 */kb [pregunta]* — Knowledge base`,
+            ``,
+            `💬 O escribime (o mandame un audio) y te respondo directamente.`,
+        ].join('\n')
+        await sendTelegramMessage(chatId, msg, token)
+        return
+    }
+
     if (text === '/chatid') {
         await sendTelegramMessage(chatId, `Tu Chat ID es: \`${chatId}\`\n\nAgregalo en .env.local como:\nTELEGRAM_CHAT_ID=${chatId}`, token)
     } else if (text === '/start') {
-        await sendTelegramMessage(chatId, "¡Hola! Soy tu asistente. Puedo leer tus correos, revisar tu agenda y responder preguntas sobre Arecco IA.", token)
+        await sendTelegramMessage(chatId, "¡Hola! Soy tu asistente de Arecco IA. Escribime, mandame un audio, o usá /ayuda para ver los comandos disponibles.", token)
     } else if (text === '/calendar') {
         const events = await fetchGoogleCalendarEvents(5)
         let messageText = "📅 *Tus próximos eventos en Google Calendar:*\n\n"
@@ -295,13 +418,20 @@ async function processMessageAsync(message: any, token: string) {
         await sendTelegramMessage(chatId, messageText, token)
     } else {
         try {
-            // Fetch live context - concurrent with memory load + knowledge base
-            const [recentEmails, upcomingEvents, crmContacts, memoryContext, knowledgeResults] = await Promise.all([
+            // Fetch live context - concurrent with memory load + knowledge base + CRM
+            const crmClient = getCRMClient()
+            const [recentEmails, upcomingEvents, crmContacts, memoryContext, knowledgeResults, crmSnapshot] = await Promise.all([
                 fetchRecentEmails(5).catch(() => []),
                 fetchGoogleCalendarEvents(5).catch(() => []),
                 searchCRM(text, 3).catch(() => []),
                 agentOrchestrator.loadMemory(text).catch(() => ({ coreFacts: [], recentMessages: [], semanticMatches: [], conversationSummary: undefined })),
-                searchKnowledge(text, 3).catch(() => [])
+                searchKnowledge(text, 3).catch(() => []),
+                Promise.all([
+                    crmClient.from('clients').select('id, status').then(r => r.data || []),
+                    crmClient.from('leads').select('id, status, first_name, last_name, company').not('status', 'in', '("converted","unqualified")').limit(5).then(r => r.data || []),
+                    crmClient.from('deals').select('title, value, updated_at').order('value', { ascending: false }).limit(5).then(r => r.data || []),
+                    crmClient.from('projects').select('name, status').in('status', ['active', 'pending']).limit(5).then(r => r.data || []),
+                ]).then(([clients, leads, deals, projects]) => ({ clients, leads, deals, projects })).catch(() => null),
             ])
 
             let liveContext = `\n\n=== MEMORIA Y CONTEXTO ===\n`
@@ -350,6 +480,17 @@ async function processMessageAsync(message: any, token: string) {
                 crmContacts.forEach((c: any) => {
                     liveContext += `- ${c.full_name} (${c.company || 'Sin Empresa'}) | Salud: ${c.relationship_score} | Rol: ${c.role || 'N/A'}\n`
                 })
+            }
+
+            // CRM snapshot (real business data)
+            if (crmSnapshot) {
+                const pipeline = crmSnapshot.deals.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0)
+                liveContext += `\n**CRM del negocio (Arecco IA):**\n`
+                liveContext += `- Clientes activos: ${crmSnapshot.clients.filter((c: any) => c.status === 'active').length}\n`
+                liveContext += `- Leads en curso: ${crmSnapshot.leads.map((l: any) => `${l.first_name} ${l.last_name ?? ''} (${l.company ?? 'sin empresa'})`).join(', ') || 'ninguno'}\n`
+                liveContext += `- Pipeline total: $${pipeline.toLocaleString()}\n`
+                liveContext += `- Deals activos: ${crmSnapshot.deals.map((d: any) => d.title).join(', ') || 'ninguno'}\n`
+                liveContext += `- Proyectos activos: ${crmSnapshot.projects.map((p: any) => p.name).join(', ') || 'ninguno'}\n`
             }
 
             // Inject knowledge base context if relevant results found
