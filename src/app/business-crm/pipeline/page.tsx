@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { TrendingUp, DollarSign, ChevronLeft, Building2 } from 'lucide-react'
+import { TrendingUp, DollarSign, ChevronLeft, Building2, ChevronLeft as ChevronLeftIcon, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 
 type Stage = {
@@ -33,8 +33,9 @@ export default function PipelinePage() {
     const [deals, setDeals] = useState<Deal[]>([])
     const [stages, setStages] = useState<Stage[]>([])
     const [loading, setLoading] = useState(true)
+    const [moving, setMoving] = useState<string | null>(null)
 
-    useEffect(() => {
+    const fetchPipeline = () => {
         fetch('/api/business-crm/pipeline')
             .then(r => r.json())
             .then(d => {
@@ -43,7 +44,27 @@ export default function PipelinePage() {
                 setLoading(false)
             })
             .catch(() => setLoading(false))
-    }, [])
+    }
+
+    useEffect(() => { fetchPipeline() }, [])
+
+    const moveStage = async (deal: Deal, targetStageId: string) => {
+        setMoving(deal.id)
+        try {
+            const res = await fetch(`/api/business-crm/pipeline/${deal.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stage_id: targetStageId }),
+            })
+            if (res.ok) {
+                setDeals(prev => prev.map(d =>
+                    d.id === deal.id ? { ...d, stage_id: targetStageId } : d
+                ))
+            }
+        } finally {
+            setMoving(null)
+        }
+    }
 
     const totalPipeline = deals.reduce((sum, d) => sum + (Number(d.value) || 0), 0)
     const weightedPipeline = deals.reduce((sum, d) => sum + (Number(d.value) || 0) * ((d.probability ?? 50) / 100), 0)
@@ -128,42 +149,70 @@ export default function PipelinePage() {
                                             Sin deals
                                         </div>
                                     ) : (
-                                        stageDeals.map(deal => (
-                                            <div key={deal.id} className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-3 hover:border-slate-600/50 transition-colors">
-                                                <p className="text-white text-xs font-semibold mb-1 leading-snug">{deal.title}</p>
-                                                {deal.clients && (
-                                                    <div className="flex items-center gap-1 text-slate-400 text-xs mb-2">
-                                                        <Building2 size={10} />
-                                                        <span className="truncate">{deal.clients.name}</span>
-                                                    </div>
-                                                )}
-                                                {deal.value > 0 && (
-                                                    <div className="flex items-center gap-1 text-yellow-400 text-xs font-medium">
-                                                        <DollarSign size={10} />
-                                                        {formatCurrency(deal.value, deal.currency)}
-                                                    </div>
-                                                )}
-                                                {deal.probability != null && (
-                                                    <div className="mt-2">
-                                                        <div className="flex justify-between text-xs text-slate-500 mb-1">
-                                                            <span>Prob.</span>
-                                                            <span>{deal.probability}%</span>
+                                        stageDeals.map(deal => {
+                                            const currentIdx = stages.findIndex(s => s.id === deal.stage_id)
+                                            const prevStage = currentIdx > 0 ? stages[currentIdx - 1] : null
+                                            const nextStage = currentIdx < stages.length - 1 ? stages[currentIdx + 1] : null
+                                            const isMoving = moving === deal.id
+                                            return (
+                                                <div key={deal.id} className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-3 hover:border-slate-600/50 transition-colors">
+                                                    <p className="text-white text-xs font-semibold mb-1 leading-snug">{deal.title}</p>
+                                                    {deal.clients && (
+                                                        <div className="flex items-center gap-1 text-slate-400 text-xs mb-2">
+                                                            <Building2 size={10} />
+                                                            <span className="truncate">{deal.clients.name}</span>
                                                         </div>
-                                                        <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
-                                                            <div
-                                                                className="h-full rounded-full bg-emerald-500"
-                                                                style={{ width: `${deal.probability}%` }}
-                                                            />
+                                                    )}
+                                                    {deal.value > 0 && (
+                                                        <div className="flex items-center gap-1 text-yellow-400 text-xs font-medium">
+                                                            <DollarSign size={10} />
+                                                            {formatCurrency(deal.value, deal.currency)}
                                                         </div>
+                                                    )}
+                                                    {deal.probability != null && (
+                                                        <div className="mt-2">
+                                                            <div className="flex justify-between text-xs text-slate-500 mb-1">
+                                                                <span>Prob.</span>
+                                                                <span>{deal.probability}%</span>
+                                                            </div>
+                                                            <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
+                                                                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${deal.probability}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {deal.expected_close_date && (
+                                                        <p className="text-slate-500 text-xs mt-2">
+                                                            Cierre: {new Date(deal.expected_close_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+                                                        </p>
+                                                    )}
+                                                    {/* Move stage buttons */}
+                                                    <div className="flex gap-1 mt-2 pt-2 border-t border-slate-700/50">
+                                                        {prevStage && (
+                                                            <button
+                                                                onClick={() => moveStage(deal, prevStage.id)}
+                                                                disabled={isMoving}
+                                                                title={`Mover a ${prevStage.name}`}
+                                                                className="flex items-center gap-1 px-2 py-1 bg-slate-700/50 hover:bg-slate-600/50 rounded text-xs text-slate-400 hover:text-white transition-colors disabled:opacity-40"
+                                                            >
+                                                                <ChevronLeftIcon size={10} />
+                                                            </button>
+                                                        )}
+                                                        <span className="flex-1" />
+                                                        {nextStage && (
+                                                            <button
+                                                                onClick={() => moveStage(deal, nextStage.id)}
+                                                                disabled={isMoving}
+                                                                title={`Mover a ${nextStage.name}`}
+                                                                className="flex items-center gap-1 px-2 py-1 bg-slate-700/50 hover:bg-yellow-900/40 hover:border-yellow-500/30 border border-transparent rounded text-xs text-slate-400 hover:text-yellow-300 transition-colors disabled:opacity-40"
+                                                            >
+                                                                {isMoving ? '⟳' : nextStage.name}
+                                                                <ChevronRight size={10} />
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                )}
-                                                {deal.expected_close_date && (
-                                                    <p className="text-slate-500 text-xs mt-2">
-                                                        Cierre: {new Date(deal.expected_close_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        ))
+                                                </div>
+                                            )
+                                        })
                                     )}
                                 </div>
                             </div>

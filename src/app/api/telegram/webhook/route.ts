@@ -389,6 +389,44 @@ async function processMessageAsync(message: any, token: string) {
         return
     }
 
+    // /lead nombre, empresa — crea un lead rápido
+    // Ej: /lead Juan García, Acme Corp
+    if (text.startsWith('/lead ')) {
+        const raw = message.text?.replace(/^\/lead\s*/i, '').trim() || ''
+        if (!raw) {
+            await sendTelegramMessage(chatId, '🎯 Uso: `/lead Nombre Apellido, Empresa`\nEj: `/lead Juan García, Acme Corp`', token)
+            return
+        }
+        // Parse "Nombre Apellido, Empresa"
+        const parts = raw.split(',').map((s: string) => s.trim())
+        const fullName = parts[0] || ''
+        const company = parts[1] || null
+        const nameParts = fullName.split(' ')
+        const first_name = nameParts[0] || fullName
+        const last_name = nameParts.slice(1).join(' ') || null
+
+        const crm = getCRMClient()
+        const { error } = await crm.from('leads').insert({
+            first_name,
+            last_name,
+            company,
+            source: 'manual',
+            status: 'new',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }).select().single()
+
+        if (error) {
+            await sendTelegramMessage(chatId, `❌ Error al crear lead: ${error.message}`, token)
+            return
+        }
+        await sendTelegramMessage(chatId,
+            `✅ *Lead creado*\n👤 ${first_name}${last_name ? ' ' + last_name : ''}${company ? `\n🏢 ${company}` : ''}\n📊 Status: Nuevo\n\nVerlo en Mission Control → Leads`,
+            token
+        )
+        return
+    }
+
     if (text === '/ayuda' || text === '/help') {
         const msg = [
             `🤖 *Mission Control — Comandos*`,
@@ -400,6 +438,9 @@ async function processMessageAsync(message: any, token: string) {
             `📅 */calendar* — Próximos eventos`,
             `🧠 */advisory [proyecto]* — Advisory Council`,
             `🔍 */kb [pregunta]* — Knowledge base`,
+            ``,
+            `✏️ *Acciones rápidas:*`,
+            `➕ */lead Nombre, Empresa* — Crear lead`,
             ``,
             `💬 O escribime (o mandame un audio) y te respondo directamente.`,
         ].join('\n')
