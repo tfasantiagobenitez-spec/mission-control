@@ -46,11 +46,11 @@ export function Sidebar() {
 
     const crmLinks = [
         { href: '/business-crm', label: 'Overview', icon: Briefcase },
-        { href: '/business-crm/clientes', label: 'Clientes', icon: Building2 },
-        { href: '/business-crm/contactos', label: 'Contactos', icon: UserCheck },
-        { href: '/business-crm/pipeline', label: 'Pipeline', icon: TrendingUp },
-        { href: '/business-crm/leads', label: 'Leads', icon: Target },
-        { href: '/business-crm/proyectos', label: 'Proyectos', icon: FolderOpen },
+        { href: '/business-crm/leads', label: '1. Leads', icon: Target },
+        { href: '/business-crm/clientes', label: '2. Clientes', icon: Building2 },
+        { href: '/business-crm/contactos', label: '3. Contactos', icon: UserCheck },
+        { href: '/business-crm/pipeline', label: '4. Pipeline', icon: TrendingUp },
+        { href: '/business-crm/proyectos', label: '5. Proyectos', icon: FolderOpen },
     ]
 
     return (
