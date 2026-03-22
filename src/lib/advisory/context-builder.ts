@@ -144,21 +144,21 @@ export async function summarizeContext(context: ProjectContext): Promise<Project
         .map(k => `• ${k.title || k.sourceUrl}: ${k.text.slice(0, 300)}`)
         .join('\n') || 'No knowledge base entries.'
 
-    const prompt = `You are a senior business analyst. Synthesize the following project data into a concise PROJECT SNAPSHOT (max 400 words) that captures the current state, key facts, recent activity, and open questions for the project "${context.project}".
+    const prompt = `Sos un analista de negocios senior. Sintetizá los siguientes datos del proyecto en un RESUMEN EJECUTIVO conciso (máx 400 palabras) que capture el estado actual, hechos clave, actividad reciente y preguntas abiertas del proyecto "${context.project}". Respondé siempre en español.
 
-=== KNOWN FACTS ===
+=== HECHOS CONOCIDOS ===
 ${factsBlock}
 
-=== RECENT CONVERSATIONS (last 15 messages) ===
+=== CONVERSACIONES RECIENTES (últimos 15 mensajes) ===
 ${messagesBlock}
 
-=== KNOWLEDGE BASE (top results) ===
+=== BASE DE CONOCIMIENTO (resultados principales) ===
 ${knowledgeBlock}
 
-=== RECENT ACTIVITY ===
+=== ACTIVIDAD RECIENTE ===
 ${context.activity_summary}
 
-Write a dense, structured snapshot. Include: current project status, key challenges, recent decisions, open priorities. Be specific and direct. No filler.`
+Escribí un resumen denso y estructurado en español. Incluí: estado actual del proyecto, desafíos clave, decisiones recientes, prioridades abiertas. Sé específico y directo. Sin relleno.`
 
     const result = await chatCompletion({
         messages: [{ role: 'user', content: prompt }],
