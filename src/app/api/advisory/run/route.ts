@@ -4,6 +4,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runCouncil } from '@/lib/advisory/run-council'
 
+export const maxDuration = 60 // Vercel Pro: up to 300s. Hobby: up to 60s.
+
 /**
  * POST /api/advisory/run
  *
