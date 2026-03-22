@@ -6,7 +6,7 @@ export async function GET(req: Request) {
     const search = searchParams.get('q') || ''
 
     const db = getCRMClient()
-    let query = db.from('contacts').select('*, clients(name)').order('created_at', { ascending: false })
+    let query = db.from('contacts').select('id, first_name, last_name, company, role_function, email, phone, linkedin, source, client_id, created_at').order('created_at', { ascending: false })
 
     if (search) {
         query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,company.ilike.%${search}%`)

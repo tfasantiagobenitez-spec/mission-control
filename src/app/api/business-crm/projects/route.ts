@@ -6,7 +6,7 @@ export async function GET() {
 
     const { data, error } = await db
         .from('projects')
-        .select('*, clients(name), tasks(id, status, title, deadline)')
+        .select('id, name, description, status, client_id, created_at')
         .order('created_at', { ascending: false })
         .limit(50)
 
