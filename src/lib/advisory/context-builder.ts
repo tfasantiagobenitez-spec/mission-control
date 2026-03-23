@@ -57,7 +57,8 @@ export async function buildProjectContext(project: string): Promise<ProjectConte
     const [factsResult, messagesResult, knowledgeResults, crmData] = await Promise.all([
         supabase
             .from('conversation_facts')
-            .select('key, value, source')
+            .select('key, value, source, project')
+            .or(`project.eq.${project},project.is.null`)
             .order('updated_at', { ascending: false })
             .limit(50),
 
@@ -93,16 +94,16 @@ export async function buildProjectContext(project: string): Promise<ProjectConte
     const enrichedFacts = [...facts]
     if (crmData) {
         if (crmData.activeClients.length > 0) {
-            enrichedFacts.push({ key: 'CRM_active_clients', value: crmData.activeClients.join('; '), source: 'crm' })
+            enrichedFacts.push({ key: 'CRM_active_clients', value: crmData.activeClients.join('; '), source: 'crm', project: null })
         }
         if (crmData.pipelineDeals.length > 0) {
-            enrichedFacts.push({ key: 'CRM_pipeline_deals', value: crmData.pipelineDeals.join(' | '), source: 'crm' })
+            enrichedFacts.push({ key: 'CRM_pipeline_deals', value: crmData.pipelineDeals.join(' | '), source: 'crm', project: null })
         }
         if (crmData.recentLeads.length > 0) {
-            enrichedFacts.push({ key: 'CRM_recent_leads', value: crmData.recentLeads.slice(0, 8).join('; '), source: 'crm' })
+            enrichedFacts.push({ key: 'CRM_recent_leads', value: crmData.recentLeads.slice(0, 8).join('; '), source: 'crm', project: null })
         }
         if (crmData.activeProjects.length > 0) {
-            enrichedFacts.push({ key: 'CRM_active_projects', value: crmData.activeProjects.join(' | '), source: 'crm' })
+            enrichedFacts.push({ key: 'CRM_active_projects', value: crmData.activeProjects.join(' | '), source: 'crm', project: null })
         }
     }
 

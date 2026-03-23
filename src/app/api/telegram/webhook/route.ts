@@ -427,6 +427,91 @@ async function processMessageAsync(message: any, token: string) {
         return
     }
 
+    // /fact proyecto | clave | valor  → guarda fact vinculado a un proyecto
+    // /fact clave | valor             → guarda fact global (sin proyecto)
+    // Ej: /fact drones | inversor | TechFund, contacto Marcos
+    // Ej: /fact preferencia_idioma | español
+    if (text.startsWith('/fact ')) {
+        const raw = message.text?.replace(/^\/fact\s*/i, '').trim() || ''
+        if (!raw) {
+            await sendTelegramMessage(chatId,
+                `📝 *Guardar un hecho*\n\n` +
+                `Con proyecto:\n\`/fact [proyecto] | [clave] | [valor]\`\n` +
+                `Ej: \`/fact drones | inversor | TechFund, contacto Marcos\`\n\n` +
+                `Global (sin proyecto):\n\`/fact [clave] | [valor]\`\n` +
+                `Ej: \`/fact idioma_preferido | español\``,
+                token)
+            return
+        }
+        const parts = raw.split('|').map((s: string) => s.trim())
+        let project: string | null = null
+        let key: string
+        let value: string
+        if (parts.length >= 3) {
+            // /fact proyecto | clave | valor
+            project = parts[0].toLowerCase().replace(/\s+/g, '_')
+            key = parts[1].toLowerCase().replace(/\s+/g, '_')
+            value = parts.slice(2).join('|').trim()
+        } else if (parts.length === 2) {
+            // /fact clave | valor (global)
+            key = parts[0].toLowerCase().replace(/\s+/g, '_')
+            value = parts[1]
+        } else {
+            await sendTelegramMessage(chatId, '⚠️ Formato: `/fact [proyecto] | [clave] | [valor]`', token)
+            return
+        }
+        const { error } = await supabase
+            .from('conversation_facts')
+            .upsert(
+                { key, value, source: 'manual', project, updated_at: new Date().toISOString() },
+                { onConflict: 'key,project' }
+            )
+        if (error) {
+            await sendTelegramMessage(chatId, `❌ Error al guardar: ${error.message}`, token)
+            return
+        }
+        const scope = project ? `proyecto *${project}*` : `contexto global`
+        await sendTelegramMessage(chatId,
+            `✅ *Hecho guardado* (${scope})\n\n🔑 \`${key}\`\n📝 ${value}`,
+            token)
+        return
+    }
+
+    // /facts [proyecto]  → lista facts de un proyecto (o todos si no especifica)
+    if (text === '/facts' || text.startsWith('/facts ')) {
+        const projectFilter = message.text?.replace(/^\/facts\s*/i, '').trim() || null
+        let query = supabase
+            .from('conversation_facts')
+            .select('key, value, project, updated_at')
+            .order('updated_at', { ascending: false })
+            .limit(30)
+        if (projectFilter) {
+            query = query.eq('project', projectFilter.toLowerCase().replace(/\s+/g, '_'))
+        }
+        const { data: facts, error } = await query
+        if (error || !facts || facts.length === 0) {
+            const scope = projectFilter ? `proyecto *${projectFilter}*` : 'sistema'
+            await sendTelegramMessage(chatId, `No hay hechos guardados para ${scope}.`, token)
+            return
+        }
+        const grouped: Record<string, typeof facts> = {}
+        facts.forEach(f => {
+            const group = f.project || '🌐 global'
+            if (!grouped[group]) grouped[group] = []
+            grouped[group].push(f)
+        })
+        let msg = projectFilter
+            ? `📋 *Facts — ${projectFilter}:*\n\n`
+            : `📋 *Facts guardados:*\n\n`
+        Object.entries(grouped).forEach(([group, items]) => {
+            msg += `*${group}*\n`
+            items.forEach(f => { msg += `  • \`${f.key}\`: ${f.value}\n` })
+            msg += '\n'
+        })
+        await sendTelegramMessage(chatId, msg, token)
+        return
+    }
+
     if (text === '/ayuda' || text === '/help') {
         const msg = [
             `🤖 *Mission Control — Comandos*`,
@@ -441,6 +526,8 @@ async function processMessageAsync(message: any, token: string) {
             ``,
             `✏️ *Acciones rápidas:*`,
             `➕ */lead Nombre, Empresa* — Crear lead`,
+            `📝 */fact [proyecto] | [clave] | [valor]* — Guardar info de proyecto`,
+            `📋 */facts [proyecto]* — Ver info guardada`,
             ``,
             `💬 O escribime (o mandame un audio) y te respondo directamente.`,
         ].join('\n')
