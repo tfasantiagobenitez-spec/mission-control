@@ -427,6 +427,41 @@ async function processMessageAsync(message: any, token: string) {
         return
     }
 
+    // /delfact proyecto | clave  → borra un fact de un proyecto
+    // /delfact clave             → borra un fact global
+    if (text.startsWith('/delfact ')) {
+        const raw = message.text?.replace(/^\/delfact\s*/i, '').trim() || ''
+        if (!raw) {
+            await sendTelegramMessage(chatId,
+                `🗑️ Uso:\n\`/delfact [proyecto] | [clave]\`\nEj: \`/delfact calier | presupuesto\`\n\nGlobal:\n\`/delfact [clave]\``,
+                token)
+            return
+        }
+        const parts = raw.split('|').map((s: string) => s.trim())
+        let project: string | null = null
+        let key: string
+        if (parts.length >= 2) {
+            project = parts[0].toLowerCase().replace(/\s+/g, '_')
+            key = parts[1].toLowerCase().replace(/\s+/g, '_')
+        } else {
+            key = parts[0].toLowerCase().replace(/\s+/g, '_')
+        }
+        let query = supabase.from('conversation_facts').delete().eq('key', key)
+        if (project) {
+            query = query.eq('project', project)
+        } else {
+            query = query.is('project', null)
+        }
+        const { error } = await query
+        if (error) {
+            await sendTelegramMessage(chatId, `❌ Error: ${error.message}`, token)
+            return
+        }
+        const scope = project ? `proyecto *${project}*` : `contexto global`
+        await sendTelegramMessage(chatId, `🗑️ Fact \`${key}\` eliminado de ${scope}.`, token)
+        return
+    }
+
     // /fact proyecto | clave | valor  → guarda fact vinculado a un proyecto
     // /fact clave | valor             → guarda fact global (sin proyecto)
     // Ej: /fact drones | inversor | TechFund, contacto Marcos
@@ -528,6 +563,7 @@ async function processMessageAsync(message: any, token: string) {
             `➕ */lead Nombre, Empresa* — Crear lead`,
             `📝 */fact [proyecto] | [clave] | [valor]* — Guardar info de proyecto`,
             `📋 */facts [proyecto]* — Ver info guardada`,
+            `🗑️ */delfact [proyecto] | [clave]* — Borrar un fact`,
             ``,
             `💬 O escribime (o mandame un audio) y te respondo directamente.`,
         ].join('\n')
