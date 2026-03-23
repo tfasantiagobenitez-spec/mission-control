@@ -98,7 +98,7 @@ export async function getNewMeetings(): Promise<FirefliesTranscript[]> {
   const fromDate = since.toISOString().split('T')[0]
 
   const data = await firefliesQuery(`
-    query GetTranscripts($fromDate: String) {
+    query GetTranscripts($fromDate: DateTime) {
       transcripts(fromDate: $fromDate, limit: 20) {
         id title date duration organizer_email
         meeting_attendees { displayName email }
