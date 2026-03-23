@@ -264,34 +264,38 @@ export async function processMeeting(meeting: FirefliesTranscript): Promise<Proc
     }
   }
 
-  // "My" action items → pending_approval (linked to first non-self contact)
-  const firstContact = attendees[0]
-  if (firstContact && myItems.length > 0) {
-    const { data: contact } = await supabase
-      .from('crm_contacts')
-      .select('id')
-      .eq('email', firstContact.email.toLowerCase().trim())
-      .single()
+  // "My" action items → pending_approval
+  // Works even when Fireflies returns no attendees (solo recordings, etc.)
+  if (myItems.length > 0) {
+    const firstContact = attendees[0]
+    let contactId: string | null = null
 
-    if (contact) {
-      for (const ai of myItems) {
-        const { data: reminder } = await supabase
-          .from('crm_reminders')
-          .upsert({
-            contact_id: contact.id,
-            text: ai.item,
-            source: 'fireflies',
-            owner: 'mine',
-            meeting_id: meeting.id,
-            status: 'pending_approval',
-            external_id: `ff-mine-${meeting.id}-${ai.item.slice(0, 32)}`,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'external_id' })
-          .select('id')
-          .single()
+    if (firstContact) {
+      const { data: contact } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .eq('email', firstContact.email.toLowerCase().trim())
+        .single()
+      contactId = contact?.id ?? null
+    }
 
-        if (reminder?.id) myReminderIds.push(reminder.id)
-      }
+    for (const ai of myItems) {
+      const { data: reminder } = await supabase
+        .from('crm_reminders')
+        .upsert({
+          contact_id: contactId,
+          text: ai.item,
+          source: 'fireflies',
+          owner: 'mine',
+          meeting_id: meeting.id,
+          status: 'pending_approval',
+          external_id: `ff-mine-${meeting.id}-${ai.item.slice(0, 32)}`,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'external_id' })
+        .select('id')
+        .single()
+
+      if (reminder?.id) myReminderIds.push(reminder.id)
     }
   }
 
