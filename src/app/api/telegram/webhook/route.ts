@@ -548,62 +548,52 @@ async function processMessageAsync(message: any, token: string) {
     }
 
     // ── /reunion — crear evento en Google Calendar ────────────────────────────
-    // Uso: /reunion Mañana 10am con Juan García de Acme — revisar propuesta
+    // Formato: /reunion DD/MM HH:MM | Título | Persona (opcional)
+    // Ej:      /reunion 28/03 10:00 | Reunion Marco Rubio
+    // Ej:      /reunion 28/03 15:00 | Call equipo | Carolina Arecco
     if (text.startsWith('/reunion ')) {
         const raw = message.text?.replace(/^\/reunion\s*/i, '').trim() || ''
-        if (!raw) {
-            await sendTelegramMessage(chatId, '📅 Uso: `/reunion [descripción natural]`\nEj: `/reunion Mañana 10am con Juan García de Acme — revisar propuesta`', token)
+        const parts = raw.split('|').map((s: string) => s.trim())
+
+        // Validate format
+        if (!raw || parts.length < 2) {
+            await sendTelegramMessage(chatId,
+                '📅 *Formato:*\n`/reunion DD/MM HH:MM | Título | Persona (opcional)`\n\n' +
+                '*Ejemplos:*\n' +
+                '`/reunion 28/03 10:00 | Reunion Marco Rubio`\n' +
+                '`/reunion 28/03 15:00 | Call equipo | Carolina Arecco`',
+                token)
             return
         }
 
-        await sendTelegramMessage(chatId, '📅 Procesando reunión...', token)
-
         try {
-            // Parse date/time with LLM
-            const now = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })
-            const parseResult = await chatCompletion({
-                messages: [{
-                    role: 'user',
-                    content: `Hoy es ${now} (Argentina, UTC-3).
-Extraé los datos de esta reunión y respondé SOLO con JSON:
-{"title": "título del evento", "start": "2026-03-27T10:00:00-03:00", "end": "2026-03-27T11:00:00-03:00", "attendee_name": "nombre completo o null", "attendee_company": "empresa o null", "description": "descripción o null"}
+            // Parse date and time — no LLM needed
+            const dateTimeStr = parts[0] // e.g. "28/03 10:00"
+            const title = parts[1]
+            const attendeeName = parts[2] || null
 
-Reunión: "${raw}"
+            const dtMatch = dateTimeStr.match(/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/)
+            if (!dtMatch) throw new Error('Formato de fecha incorrecto. Usá DD/MM HH:MM')
 
-Reglas:
-- Si dice "mañana" calculá la fecha correcta desde hoy
-- Duración por defecto: 1 hora
-- Timezone siempre -03:00
-- Si no hay hora específica, usá 10:00`
-                }],
-                temperature: 0,
-                max_tokens: 200,
-            })
-
-            const parsed = JSON.parse(
-                (parseResult.choices[0]?.message?.content || '{}')
-                    .replace(/```json\n?|\n?```/g, '').trim()
-            )
-
-            if (!parsed.start) throw new Error('No se pudo interpretar la fecha')
+            const [, day, month, hour, min] = dtMatch
+            const year = new Date().getFullYear()
+            const startISO = `${year}-${month.padStart(2,'0')}-${day.padStart(2,'0')}T${hour.padStart(2,'0')}:${min}:00-03:00`
+            const endDate = new Date(startISO)
+            endDate.setHours(endDate.getHours() + 1)
+            const endISO = endDate.toISOString().replace('Z', '-03:00').replace(/\.\d{3}/, '')
 
             // Get Google token
-            const supabaseClient = createClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                process.env.SUPABASE_SERVICE_ROLE_KEY!
-            )
-            let { data: tokenData } = await supabaseClient
+            let { data: tokenData } = await supabase
                 .from('google_tokens')
                 .select('*')
                 .ilike('email', 'sbenitez@areccoia.com')
                 .maybeSingle()
             if (!tokenData) {
-                const { data: fallback } = await supabaseClient.from('google_tokens').select('*').limit(1)
+                const { data: fallback } = await supabase.from('google_tokens').select('*').limit(1)
                 tokenData = fallback?.[0] ?? null
             }
             if (!tokenData) throw new Error('No hay cuenta Google conectada')
 
-            // Refresh token if needed
             let accessToken = tokenData.access_token
             if (tokenData.expires_at < Date.now() + 60000 && tokenData.refresh_token) {
                 const { refreshGoogleToken } = await import('@/lib/gmail')
@@ -611,60 +601,49 @@ Reglas:
                 accessToken = refreshed.access_token
             }
 
-            // Build attendees array
-            const attendees = parsed.attendee_name
-                ? [{ email: `${parsed.attendee_name.toLowerCase().replace(/\s+/g, '.')}@placeholder.com`, displayName: parsed.attendee_name }]
-                : []
-
-            // Create Google Calendar event
-            const event = {
-                summary: parsed.title,
-                description: parsed.description || raw,
-                start: { dateTime: parsed.start, timeZone: 'America/Argentina/Buenos_Aires' },
-                end: { dateTime: parsed.end, timeZone: 'America/Argentina/Buenos_Aires' },
-                attendees,
-            }
-
+            // Create event
             const calRes = await fetch(
                 'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none',
                 {
                     method: 'POST',
                     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(event),
+                    body: JSON.stringify({
+                        summary: title,
+                        description: attendeeName ? `Con: ${attendeeName}` : undefined,
+                        start: { dateTime: startISO, timeZone: 'America/Argentina/Buenos_Aires' },
+                        end: { dateTime: endISO, timeZone: 'America/Argentina/Buenos_Aires' },
+                    }),
                 }
             )
-            if (!calRes.ok) throw new Error(`Calendar API error: ${await calRes.text()}`)
-            const createdEvent = await calRes.json()
+            if (!calRes.ok) throw new Error(`Error de Calendar: ${await calRes.text()}`)
+            const created = await calRes.json()
 
-            // Add to CRM as lead if we have a name
-            if (parsed.attendee_name) {
-                const nameParts = parsed.attendee_name.split(' ')
-                await supabaseClient.from('leads').upsert({
+            // Add to CRM if attendee name provided
+            if (attendeeName) {
+                const nameParts = attendeeName.split(' ')
+                await supabase.from('leads').insert({
                     first_name: nameParts[0],
                     last_name: nameParts.slice(1).join(' ') || null,
-                    company: parsed.attendee_company || null,
                     source: 'telegram',
                     status: 'new',
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
-                }, { onConflict: 'id', ignoreDuplicates: true })
+                }).select()
             }
 
-            const startFormatted = new Date(parsed.start).toLocaleString('es-AR', {
+            const formatted = new Date(startISO).toLocaleString('es-AR', {
                 timeZone: 'America/Argentina/Buenos_Aires',
-                weekday: 'long', day: 'numeric', month: 'long',
-                hour: '2-digit', minute: '2-digit'
+                weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
             })
 
-            const eventLink = createdEvent.htmlLink || ''
-            let reply = `✅ *Reunión creada*\n\n📋 ${parsed.title}\n📅 ${startFormatted}`
-            if (parsed.attendee_name) reply += `\n👤 ${parsed.attendee_name}${parsed.attendee_company ? ` — ${parsed.attendee_company}` : ''}`
-            if (eventLink) reply += `\n🔗 [Ver en Calendar](${eventLink})`
+            let reply = `✅ *Reunión creada*\n\n📋 ${title}\n📅 ${formatted}`
+            if (attendeeName) reply += `\n👤 ${attendeeName}`
+            if (created.htmlLink) reply += `\n🔗 [Ver en Calendar](${created.htmlLink})`
 
             await sendTelegramMessage(chatId, reply, token)
 
         } catch (err: any) {
-            await sendTelegramMessage(chatId, `❌ Error al crear reunión: ${err.message}`, token)
+            await sendTelegramMessage(chatId, `❌ ${err.message}`, token)
         }
         return
     }
