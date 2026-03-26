@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const redirectUri = `${process.env.NEXTAUTH_URL || 'http://localhost:3005'}/api/auth/google/callback`
 
     const scopes = [
-        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/calendar',
         'https://www.googleapis.com/auth/userinfo.email',
         'https://www.googleapis.com/auth/gmail.modify',
     ].join(' ')
