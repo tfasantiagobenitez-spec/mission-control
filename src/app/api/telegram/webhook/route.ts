@@ -727,13 +727,6 @@ async function processMessageAsync(message: any, token: string) {
                 liveContext += `\n**Resumen de la sesión:** ${memoryContext.conversationSummary}\n`
             }
 
-            if (memoryContext.recentMessages?.length > 0) {
-                liveContext += `\n**Conversaciones recientes (últimos mensajes):**\n`
-                memoryContext.recentMessages.slice(-10).forEach((m: any) => {
-                    liveContext += `[${m.role === 'user' ? 'Santi' : 'Asistente'}]: ${m.content.slice(0, 200)}\n`
-                })
-            }
-
             liveContext += `\n**Correos recientes:**\n`
             if (recentEmails.length > 0) {
                 recentEmails.forEach((e: any) => {
@@ -773,6 +766,11 @@ async function processMessageAsync(message: any, token: string) {
             liveContext += `=============================\n`
             liveContext += `Usa la memoria y el contexto en tiempo real para ser lo más preciso posible. Si Santi pregunta por algo que ya te dijo, demostrá que lo recordás. Si hay contexto de la Knowledge Base, usalo activamente en tu respuesta y citá la fuente.`
 
+            // Build actual conversation history as proper turns (not flat text)
+            const historyMessages: ChatMessage[] = (memoryContext.recentMessages || [])
+                .slice(-10)
+                .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+
             const messages: ChatMessage[] = [
                 {
                     role: 'system',
@@ -786,6 +784,7 @@ Si pide agendar una reunion, responde SOLO con el comando listo para ejecutar:
 Arma el comando con los datos que te dio. Ejemplo:
 "Usa este comando: /reunion 28/03 14:00 | Reunion Marcos Casay - Venta Inmueble | Marcos Casay"`
                 },
+                ...historyMessages,
                 {
                     role: 'user',
                     content: message.text || text
