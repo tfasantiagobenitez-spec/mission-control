@@ -5,6 +5,7 @@ import { fetchGoogleCalendarEvents } from '@/lib/calendar-service'
 import { searchCRM } from '@/lib/crm/search'
 import { USER_CONTEXT } from '@/lib/user-context'
 import { agentOrchestrator } from '@/lib/agent'
+import { supabaseMemory } from '@/lib/memory/supabase-memory'
 import { createClient } from '@supabase/supabase-js'
 import { createTask } from '@/lib/crm/clickup'
 import { ingestSource, detectSourceType } from '@/lib/knowledge/ingest'
@@ -793,10 +794,18 @@ Arma el comando con los datos que te dio. Ejemplo:
 
             const completion = await chatCompletion({ messages, temperature: 0.7 })
             const aiResponse = completion.choices[0]?.message?.content || "No pude procesar la respuesta."
+
+            // Save messages SYNCHRONOUSLY before sending — so the next message
+            // can read this exchange from memory even if it arrives immediately after
+            await Promise.all([
+                supabaseMemory.saveMessage('user', text),
+                supabaseMemory.saveMessage('assistant', aiResponse),
+            ]).catch(err => console.error('[webhook] save messages error:', err))
+
             await sendTelegramMessage(chatId, aiResponse, token)
 
-            // Save to Supabase memory + extract facts (fire-and-forget)
-            agentOrchestrator.processBackgroundTasks(text, aiResponse)
+            // Extract facts in background (not time-sensitive)
+            agentOrchestrator.extractFactsInBackground(text, aiResponse)
         } catch (aiError: any) {
             console.error('AI Processing Error:', aiError)
             await sendTelegramMessage(chatId, `⚠️ Error en IA: ${aiError.message || "Desconocido"}`, token)

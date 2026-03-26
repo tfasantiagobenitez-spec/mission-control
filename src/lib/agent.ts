@@ -1,7 +1,5 @@
-// Mocks for Vercel/Serverless where SQLite/Pinecone are currently broken/not supported
-const sqliteMemory: any = { getFacts: () => [], getRecentMessages: () => [], getLatestSummary: () => undefined, saveMessage: () => { }, pruneMessages: () => { } };
-const pineconeMemory: any = { searchConversations: async (...args: any[]) => [], storeExchange: async (...args: any[]) => { } };
 import { supabaseStore } from './memory/supabase-store';
+import { supabaseMemory } from './memory/supabase-memory';
 
 export interface AgentContext {
     coreFacts: any[];
@@ -12,52 +10,59 @@ export interface AgentContext {
 
 export const agentOrchestrator = {
     /**
-     * Parallel loading of all memory tiers
+     * Load memory from Supabase: recent messages + extracted facts
      */
-    loadMemory: async (query: string): Promise<AgentContext> => {
-        const [coreFacts, recentMessages, conversationSummary, semanticMatches] = await Promise.all([
-            Promise.resolve(sqliteMemory.getFacts()),
-            Promise.resolve(sqliteMemory.getRecentMessages(20)),
-            Promise.resolve(sqliteMemory.getLatestSummary()),
-            pineconeMemory.searchConversations(query, 3).catch(() => []) // Graceful degradation
+    loadMemory: async (_query: string): Promise<AgentContext> => {
+        const [coreFacts, recentMessages] = await Promise.all([
+            supabaseMemory.getFacts().catch(() => []),
+            supabaseMemory.getRecentMessages(20).catch(() => []),
         ]);
 
         return {
             coreFacts,
             recentMessages,
-            conversationSummary: conversationSummary?.summary,
-            semanticMatches
+            conversationSummary: undefined,
+            semanticMatches: [],
         };
     },
 
     /**
-     * Fire-and-forget background operations
+     * Fire-and-forget: save messages + extract facts in background
      */
     processBackgroundTasks: async (userMessage: string, assistantResponse: string) => {
-        // Run in background, don't await
         (async () => {
             try {
-                // Tier 1: Save messages
-                sqliteMemory.saveMessage('user', userMessage);
-                sqliteMemory.saveMessage('assistant', assistantResponse);
+                await Promise.all([
+                    supabaseMemory.saveMessage('user', userMessage),
+                    supabaseMemory.saveMessage('assistant', assistantResponse),
+                ]);
 
-                // Tier 1: Prune/Compact if needed
-                sqliteMemory.pruneMessages(30);
+                // Extract and persist facts from this exchange
+                const facts = await supabaseMemory.extractFacts(userMessage, assistantResponse);
+                for (const fact of facts) {
+                    await supabaseMemory.saveFact(fact.key, fact.value, fact.source);
+                }
 
-                // Tier 1: Fact extraction (Mocked here - in real implementation this calls an LLM)
-                console.log('Extracting facts in background...');
-
-                // Tier 2: Embed and store exchange
-                const exchangeId = `msg_${Date.now()}`;
-                await pineconeMemory.storeExchange(exchangeId, userMessage, 'user').catch((e: any) => console.error('Pinecone error:', e));
-
-                // Tier 3: Log activity
                 await supabaseStore.logActivity('message_processed', 'User interaction handled', 'success');
-
-                // Tier 3: Log cost (Mocked)
-                await supabaseStore.logCost('openai', 'gpt-4o', 500, 0.01);
             } catch (error) {
-                console.error('Error in agent background tasks:', error);
+                console.error('[agent] background tasks error:', error);
+            }
+        })();
+    },
+
+    /**
+     * Fire-and-forget: only extract facts (messages already saved synchronously)
+     */
+    extractFactsInBackground: (userMessage: string, assistantResponse: string) => {
+        (async () => {
+            try {
+                const facts = await supabaseMemory.extractFacts(userMessage, assistantResponse);
+                for (const fact of facts) {
+                    await supabaseMemory.saveFact(fact.key, fact.value, fact.source);
+                }
+                await supabaseStore.logActivity('message_processed', 'User interaction handled', 'success');
+            } catch (error) {
+                console.error('[agent] extractFactsInBackground error:', error);
             }
         })();
     }
