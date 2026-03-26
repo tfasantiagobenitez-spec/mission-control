@@ -1,0 +1,201 @@
+{
+  "name": "MC — Drive",
+  "nodes": [
+    {
+      "id": "drv-0001",
+      "name": "When Called",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {}
+    },
+    {
+      "id": "drv-0002",
+      "name": "Get Google Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.MISSION_CONTROL_URL }}/api/n8n/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-mission-secret", "value": "={{ $env.MISSION_CONTROL_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "drv-0003",
+      "name": "Upload or Search?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $('When Called').first().json.body.action.type }}",
+              "rightValue": "DRIVE_UPLOAD",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "drv-0004",
+      "name": "Download from Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 200],
+      "parameters": {
+        "jsCode": "const params = $('When Called').first().json.body.action.params;\nconst telegramFileId = $('When Called').first().json.body.telegram_file_id || params.telegram_file_id;\nconst botToken = $env.TELEGRAM_BOT_TOKEN;\n\n// Step 1: Get file path from Telegram\nconst getFileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${telegramFileId}`);\nconst getFileData = await getFileRes.json();\nif (!getFileData.ok) throw new Error(`Telegram getFile failed: ${JSON.stringify(getFileData)}`);\n\nconst filePath = getFileData.result.file_path;\n\n// Step 2: Download file binary\nconst downloadUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;\nconst fileRes = await fetch(downloadUrl);\nif (!fileRes.ok) throw new Error(`Telegram file download failed: ${fileRes.status}`);\n\nconst buffer = Buffer.from(await fileRes.arrayBuffer());\nconst base64 = buffer.toString('base64');\n\nreturn [{\n  json: {\n    filename: params.filename || filePath.split('/').pop() || 'archivo',\n    mimeType: params.mime_type || 'application/octet-stream',\n    folderId: params.folder_id || null,\n    base64,\n    byteLength: buffer.length,\n  }\n}];"
+      }
+    },
+    {
+      "id": "drv-0005",
+      "name": "Upload to Drive",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 200],
+      "parameters": {
+        "jsCode": "const { filename, mimeType, folderId, base64 } = $input.first().json;\nconst accessToken = $('Get Google Token').first().json.access_token;\n\n// Build multipart body for Drive upload\nconst boundary = `drive_upload_${Date.now()}`;\nconst metadata = { name: filename };\nif (folderId) metadata.parents = [folderId];\n\nconst metadataJson = JSON.stringify(metadata);\nconst fileBuffer = Buffer.from(base64, 'base64');\n\n// Build raw multipart body\nconst parts = [\n  `--${boundary}`,\n  `Content-Type: application/json; charset=UTF-8`,\n  ``,\n  metadataJson,\n  `--${boundary}`,\n  `Content-Type: ${mimeType}`,\n  `Content-Transfer-Encoding: base64`,\n  ``,\n  base64,\n  `--${boundary}--`,\n].join('\\r\\n');\n\nconst uploadRes = await fetch(\n  'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink',\n  {\n    method: 'POST',\n    headers: {\n      Authorization: `Bearer ${accessToken}`,\n      'Content-Type': `multipart/related; boundary=${boundary}`,\n    },\n    body: parts,\n  }\n);\n\nif (!uploadRes.ok) {\n  const err = await uploadRes.text();\n  throw new Error(`Drive upload failed: ${uploadRes.status} — ${err}`);\n}\n\nconst file = await uploadRes.json();\n\n// Set file to be viewable by anyone with the link (optional — comment out if not needed)\nawait fetch(`https://www.googleapis.com/drive/v3/files/${file.id}/permissions`, {\n  method: 'POST',\n  headers: {\n    Authorization: `Bearer ${accessToken}`,\n    'Content-Type': 'application/json',\n  },\n  body: JSON.stringify({ role: 'reader', type: 'anyone' }),\n});\n\nreturn [{ json: { success: true, file_id: file.id, file_name: file.name, view_link: file.webViewLink, download_link: file.webContentLink } }];"
+      }
+    },
+    {
+      "id": "drv-0006",
+      "name": "Follow-up Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1300, 200],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ !!$('When Called').first().json.body.follow_up_email }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "drv-0007",
+      "name": "Send Email with Attachment",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1500, 140],
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "GMAIL_WORKFLOW_ID", "mode": "id" },
+        "source": "database",
+        "options": { "waitForSubWorkflow": true },
+        "fields": {
+          "values": [
+            {
+              "key": "body",
+              "value": "={{ { action: { type: 'GMAIL_SEND', params: { to: $('When Called').first().json.body.follow_up_email.to, subject: $('When Called').first().json.body.follow_up_email.subject, body: $('When Called').first().json.body.follow_up_email.body, drive_file_ids: [$('Upload to Drive').first().json.file_id] } }, job_id: $('When Called').first().json.body.job_id, chat_id: $('When Called').first().json.body.chat_id } }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drv-0008",
+      "name": "Search Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 420],
+      "parameters": {
+        "jsCode": "const params = $('When Called').first().json.body.action.params;\nconst accessToken = $('Get Google Token').first().json.access_token;\nconst query = params.query || '';\nconst maxResults = params.max_results || 5;\n\nconst encodedQuery = encodeURIComponent(`name contains '${query.replace(/'/g, \"\\\\'\")}'`);\nconst url = `https://www.googleapis.com/drive/v3/files?q=${encodedQuery}&fields=files(id,name,mimeType,webViewLink,modifiedTime)&pageSize=${maxResults}&orderBy=modifiedTime desc`;\n\nconst res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });\nif (!res.ok) throw new Error(`Drive search failed: ${res.status}`);\n\nconst data = await res.json();\nreturn [{ json: { success: true, files: data.files || [] } }];"
+      }
+    },
+    {
+      "id": "drv-0009",
+      "name": "Send Callback (upload)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1700, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MISSION_CONTROL_URL }}/api/n8n/callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-mission-secret", "value": "={{ $env.MISSION_CONTROL_WEBHOOK_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $('When Called').first().json.body.job_id, chat_id: $('When Called').first().json.body.chat_id, action_type: 'DRIVE_UPLOAD', result: { ...$('Upload to Drive').first().json, email_sent: !!$('When Called').first().json.body.follow_up_email } } }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "drv-0010",
+      "name": "Send Callback (search)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1100, 420],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MISSION_CONTROL_URL }}/api/n8n/callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-mission-secret", "value": "={{ $env.MISSION_CONTROL_WEBHOOK_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $('When Called').first().json.body.job_id, chat_id: $('When Called').first().json.body.chat_id, action_type: 'DRIVE_SEARCH', result: $('Search Files').first().json } }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "When Called": {
+      "main": [[ { "node": "Get Google Token", "type": "main", "index": 0 } ]]
+    },
+    "Get Google Token": {
+      "main": [[ { "node": "Upload or Search?", "type": "main", "index": 0 } ]]
+    },
+    "Upload or Search?": {
+      "main": [
+        [ { "node": "Download from Telegram", "type": "main", "index": 0 } ],
+        [ { "node": "Search Files", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Download from Telegram": {
+      "main": [[ { "node": "Upload to Drive", "type": "main", "index": 0 } ]]
+    },
+    "Upload to Drive": {
+      "main": [[ { "node": "Follow-up Email?", "type": "main", "index": 0 } ]]
+    },
+    "Follow-up Email?": {
+      "main": [
+        [ { "node": "Send Email with Attachment", "type": "main", "index": 0 } ],
+        [ { "node": "Send Callback (upload)", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Send Email with Attachment": {
+      "main": [[ { "node": "Send Callback (upload)", "type": "main", "index": 0 } ]]
+    },
+    "Search Files": {
+      "main": [[ { "node": "Send Callback (search)", "type": "main", "index": 0 } ]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true }
+}

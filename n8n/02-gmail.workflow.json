@@ -1,0 +1,159 @@
+{
+  "name": "MC — Gmail",
+  "nodes": [
+    {
+      "id": "gmail-0001",
+      "name": "When Called",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {}
+    },
+    {
+      "id": "gmail-0002",
+      "name": "Get Google Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.MISSION_CONTROL_URL }}/api/n8n/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-mission-secret", "value": "={{ $env.MISSION_CONTROL_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "gmail-0003",
+      "name": "Has Attachments?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ ($input.first().json.body?.action?.params?.drive_file_ids || []).length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "gmail-0004",
+      "name": "Fetch Drive Attachments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 200],
+      "parameters": {
+        "jsCode": "// Fetch each Drive file and return base64 data + metadata\nconst params = $('When Called').first().json.body.action.params;\nconst accessToken = $('Get Google Token').first().json.access_token;\nconst fileIds = params.drive_file_ids || [];\n\nconst attachments = [];\nfor (const fileId of fileIds) {\n  // Get file metadata\n  const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType`, {\n    headers: { Authorization: `Bearer ${accessToken}` }\n  });\n  const meta = await metaRes.json();\n  \n  // Download file content\n  const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {\n    headers: { Authorization: `Bearer ${accessToken}` }\n  });\n  const buffer = Buffer.from(await fileRes.arrayBuffer());\n  const base64 = buffer.toString('base64');\n  \n  attachments.push({ filename: meta.name, mimeType: meta.mimeType, base64 });\n}\n\nreturn [{ json: { attachments } }];"
+      }
+    },
+    {
+      "id": "gmail-0005",
+      "name": "Build MIME Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300],
+      "parameters": {
+        "jsCode": "const params = $('When Called').first().json.body.action.params;\nconst actionType = $('When Called').first().json.body.action.type;\nconst accessToken = $('Get Google Token').first().json.access_token;\nconst attachments = $input.first().json?.attachments || [];\n\nconst boundary = `mc_boundary_${Date.now()}`;\nconst isHtml = params.is_html || false;\nconst contentType = isHtml ? 'text/html' : 'text/plain';\n\n// Build headers\nconst headers = [];\nif (actionType === 'GMAIL_REPLY' && params.thread_id) {\n  // For replies, we need In-Reply-To header\n  headers.push(`In-Reply-To: <${params.message_id}>`);\n  headers.push(`References: <${params.message_id}>`);\n}\n\nlet mime;\nif (attachments.length === 0) {\n  // Simple message\n  const msgHeaders = [\n    `To: ${params.to}`,\n    params.cc ? `Cc: ${params.cc}` : null,\n    `Subject: ${params.subject}`,\n    `MIME-Version: 1.0`,\n    `Content-Type: ${contentType}; charset=utf-8`,\n    ...headers,\n  ].filter(Boolean).join('\\r\\n');\n  mime = `${msgHeaders}\\r\\n\\r\\n${params.body}`;\n} else {\n  // Multipart message with attachments\n  const msgHeaders = [\n    `To: ${params.to}`,\n    params.cc ? `Cc: ${params.cc}` : null,\n    `Subject: ${params.subject}`,\n    `MIME-Version: 1.0`,\n    `Content-Type: multipart/mixed; boundary=\"${boundary}\"`,\n    ...headers,\n  ].filter(Boolean).join('\\r\\n');\n\n  const bodyPart = [\n    `--${boundary}`,\n    `Content-Type: ${contentType}; charset=utf-8`,\n    `Content-Transfer-Encoding: quoted-printable`,\n    ``,\n    params.body,\n  ].join('\\r\\n');\n\n  const attachParts = attachments.map(a => [\n    `--${boundary}`,\n    `Content-Type: ${a.mimeType}; name=\"${a.filename}\"`,\n    `Content-Disposition: attachment; filename=\"${a.filename}\"`,\n    `Content-Transfer-Encoding: base64`,\n    ``,\n    a.base64,\n  ].join('\\r\\n')).join('\\r\\n');\n\n  mime = `${msgHeaders}\\r\\n\\r\\n${bodyPart}\\r\\n${attachParts}\\r\\n--${boundary}--`;\n}\n\nconst raw = Buffer.from(mime).toString('base64url');\nconst threadId = params.thread_id || null;\nreturn [{ json: { raw, threadId, accessToken } }];"
+      }
+    },
+    {
+      "id": "gmail-0006",
+      "name": "Send Email via Gmail API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1320, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $json.accessToken }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { raw: $json.raw, threadId: $json.threadId || undefined } }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "gmail-0007",
+      "name": "Send Callback (success)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1540, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MISSION_CONTROL_URL }}/api/n8n/callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-mission-secret", "value": "={{ $env.MISSION_CONTROL_WEBHOOK_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $('When Called').first().json.body.job_id, chat_id: $('When Called').first().json.body.chat_id, action_type: $('When Called').first().json.body.action.type, result: { success: true, message_id: $json.id, thread_id: $json.threadId } } }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "gmail-0008",
+      "name": "No Attachments Path",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [900, 400],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            { "id": "1", "name": "attachments", "value": [], "type": "array" }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When Called": {
+      "main": [[ { "node": "Get Google Token", "type": "main", "index": 0 } ]]
+    },
+    "Get Google Token": {
+      "main": [[ { "node": "Has Attachments?", "type": "main", "index": 0 } ]]
+    },
+    "Has Attachments?": {
+      "main": [
+        [ { "node": "Fetch Drive Attachments", "type": "main", "index": 0 } ],
+        [ { "node": "No Attachments Path", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Fetch Drive Attachments": {
+      "main": [[ { "node": "Build MIME Message", "type": "main", "index": 0 } ]]
+    },
+    "No Attachments Path": {
+      "main": [[ { "node": "Build MIME Message", "type": "main", "index": 0 } ]]
+    },
+    "Build MIME Message": {
+      "main": [[ { "node": "Send Email via Gmail API", "type": "main", "index": 0 } ]]
+    },
+    "Send Email via Gmail API": {
+      "main": [[ { "node": "Send Callback (success)", "type": "main", "index": 0 } ]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true }
+}

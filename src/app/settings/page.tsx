@@ -217,7 +217,7 @@ export default function SettingsPage() {
                                     <div className="form-toggle">
                                         <div className="toggle-info">
                                             <span className="toggle-title">Memory Retention</span>
-                                            <span className="toggle-desc">Uso agresivo del Second Brain para contexto a largo plazo.</span>
+                                            <span className="toggle-desc">Uso agresivo del Brain para contexto a largo plazo.</span>
                                         </div>
                                         <label className="toggle-switch">
                                             <input type="checkbox" defaultChecked />

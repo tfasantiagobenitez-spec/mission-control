@@ -6,6 +6,7 @@ import { searchCRM } from '@/lib/crm/search'
 import { USER_CONTEXT } from '@/lib/user-context'
 import { agentOrchestrator } from '@/lib/agent'
 import { supabaseMemory } from '@/lib/memory/supabase-memory'
+import { extractAction, stripActionBlock, dispatchToN8n } from '@/lib/n8n-dispatcher'
 import { createClient } from '@supabase/supabase-js'
 import { createTask } from '@/lib/crm/clickup'
 import { ingestSource, detectSourceType } from '@/lib/knowledge/ingest'
@@ -140,6 +141,18 @@ async function processMessageAsync(message: any, token: string) {
     const chatId = message.chat.id
     // Normalize: lowercase + trim + strip bot username suffix (e.g. /leads@botname → /leads)
     let text = message.text ? message.text.toLowerCase().trim().replace(/@\w+$/, '').trim() : ''
+
+    // Capture attached file info (document, photo, etc.) for n8n Drive/Email workflows
+    const attachedFile = message.document
+        ? { fileId: message.document.file_id, fileName: message.document.file_name || 'archivo', mimeType: message.document.mime_type || 'application/octet-stream' }
+        : message.photo
+            ? { fileId: message.photo[message.photo.length - 1].file_id, fileName: 'imagen.jpg', mimeType: 'image/jpeg' }
+            : null
+
+    // If the message has only a file (no text), set a placeholder text so the AI knows
+    if (attachedFile && !text && !message.voice) {
+        text = `[archivo adjunto: ${attachedFile.fileName}]`
+    }
 
     if (message.voice) {
         try {
@@ -727,17 +740,28 @@ async function processMessageAsync(message: any, token: string) {
                 liveContext += `\n**Resumen de la sesión:** ${memoryContext.conversationSummary}\n`
             }
 
+            // Inject file attachment context so Claude knows a file is available
+            if (attachedFile) {
+                liveContext += `\n**Archivo adjunto en este mensaje:**\n`
+                liveContext += `- Nombre: ${attachedFile.fileName}\n`
+                liveContext += `- Tipo: ${attachedFile.mimeType}\n`
+                liveContext += `- Telegram file_id: ${attachedFile.fileId}\n`
+                liveContext += `(Si Santi quiere subir o enviar este archivo, usa ese file_id en el ACTION block)\n`
+            }
+
             liveContext += `\n**Correos recientes:**\n`
             if (recentEmails.length > 0) {
                 recentEmails.forEach((e: any) => {
-                    liveContext += `- De: ${e.sender} | Asunto: ${e.subject}\n`
+                    // Include id and threadId so Claude can emit GMAIL_REPLY with correct IDs
+                    liveContext += `- [id:${(e as any).id || '?'}] [thread:${(e as any).threadId || '?'}] De: ${e.sender} | Asunto: ${e.subject}\n`
                 })
             }
 
             liveContext += `\n**Próximos eventos:**\n`
             if (upcomingEvents.length > 0) {
                 upcomingEvents.forEach((t: any) => {
-                    liveContext += `- ${t.title} (${t.startTime})\n`
+                    // Include event_id so Claude can emit CALENDAR_UPDATE with correct ID
+                    liveContext += `- [event_id:${(t as any).id || '?'}] ${t.title} (${t.startTime})\n`
                 })
             }
 
@@ -774,24 +798,48 @@ async function processMessageAsync(message: any, token: string) {
             const messages: ChatMessage[] = [
                 {
                     role: 'system',
-                    content: `Eres el asistente personal de Santi. Usa este perfil para guiar tu tono e identidad corporativa:\n\n${USER_CONTEXT}${liveContext}
+                    content: `Eres el asistente personal de Santi Benitez, CFO de Arecco IA. Usa este perfil:\n\n${USER_CONTEXT}${liveContext}
 
-REGLA CRÍTICA — ACCIONES QUE NO PODÉS EJECUTAR:
-No podés crear eventos en el calendario, no podés enviar emails, no podés crear tareas. NUNCA digas "voy a hacerlo", "lo agendaré" ni "¿procedo?" porque NO podés ejecutar nada. Eso es MENTIRA y confunde.
+=== CAPACIDADES DE EJECUCIÓN (VÍA n8n) ===
+Podés ejecutar acciones reales en Gmail, Google Calendar y Google Drive.
+Cuando Santi pida una acción de estas, respondé con texto natural breve Y un bloque ACTION al final.
 
-REUNIONES — REGLA ESTRICTA:
-En cuanto Santi mencione una reunión con fecha, hora y persona (en cualquier combinación), respondé INMEDIATAMENTE con el comando listo. NO pidas confirmación. NO preguntes "¿procedo?". Solo entregá el comando y él lo ejecuta si quiere.
+FORMATO DEL BLOQUE ACTION (siempre al final, solo uno por respuesta):
+\`\`\`action
+{
+  "type": "TIPO_ACCION",
+  "params": { ... }
+}
+\`\`\`
 
-Formato obligatorio:
-/reunion DD/MM HH:MM | Titulo | Persona
+TIPOS DISPONIBLES Y SUS PARAMS:
 
-Ejemplo de respuesta correcta:
-"Acá tenés el comando listo:
-/reunion 29/03 16:00 | Reunión Marcos Casay - Venta Inmueble | Marcos Casay
+GMAIL_SEND — enviar email:
+{ "to": "email", "subject": "asunto", "body": "cuerpo completo", "cc": "opcional", "drive_file_ids": ["id1"] }
 
-Copialo y envialo para agendar."
+GMAIL_REPLY — responder email (usá los IDs del contexto de correos):
+{ "thread_id": "id", "message_id": "id", "to": "email", "subject": "Re: asunto", "body": "cuerpo" }
 
-Si faltan datos (fecha, hora o persona), pedí solo los que faltan. Si ya los tenés todos, dá el comando directo.`
+CALENDAR_CREATE — crear evento (SIEMPRE con Meet por defecto):
+{ "title": "título", "start_iso": "2026-03-29T10:00:00-03:00", "end_iso": "2026-03-29T11:00:00-03:00", "attendees": ["email"], "description": "opcional", "add_meet": true }
+
+CALENDAR_UPDATE — modificar evento (usá el event_id del contexto de calendar):
+{ "event_id": "id", "title": "opcional", "start_iso": "opcional", "end_iso": "opcional" }
+
+DRIVE_UPLOAD — subir archivo de Telegram a Drive:
+{ "telegram_file_id": "id_del_adjunto", "filename": "nombre.pdf", "mime_type": "application/pdf" }
+
+DRIVE_SEARCH — buscar archivo en Drive:
+{ "query": "nombre o término", "max_results": 5 }
+
+REGLAS OBLIGATORIAS:
+- Siempre add_meet: true en reuniones a menos que Santi diga lo contrario
+- Calculá start_iso y end_iso con timezone -03:00 (Argentina)
+- Redactá el body completo del email, no dejes [placeholders]
+- Si falta info requerida, pedísela antes de emitir el ACTION block
+- Si el mensaje tiene un archivo adjunto, su telegram_file_id está en el contexto
+- Emitís máximo UN bloque action por respuesta
+- Si NO hay acción a ejecutar, no incluyas el bloque action`
                 },
                 ...historyMessages,
                 {
@@ -801,16 +849,30 @@ Si faltan datos (fecha, hora o persona), pedí solo los que faltan. Si ya los te
             ]
 
             const completion = await chatCompletion({ messages, temperature: 0.7 })
-            const aiResponse = completion.choices[0]?.message?.content || "No pude procesar la respuesta."
+            const rawResponse = completion.choices[0]?.message?.content || "No pude procesar la respuesta."
 
-            // Save messages SYNCHRONOUSLY before sending — so the next message
-            // can read this exchange from memory even if it arrives immediately after
+            // Parse ACTION block (if any) and get clean text for Telegram
+            const action = extractAction(rawResponse)
+            const cleanText = action ? stripActionBlock(rawResponse) : rawResponse
+            const aiResponse = cleanText || rawResponse
+
+            // Save messages SYNCHRONOUSLY before sending
             await Promise.all([
                 supabaseMemory.saveMessage('user', text),
                 supabaseMemory.saveMessage('assistant', aiResponse),
             ]).catch(err => console.error('[webhook] save messages error:', err))
 
+            // Always send the natural language response to the user
             await sendTelegramMessage(chatId, aiResponse, token)
+
+            // If Claude emitted an ACTION block, dispatch to n8n
+            if (action) {
+                dispatchToN8n({
+                    chatId,
+                    action,
+                    telegramFileId: attachedFile?.fileId,
+                }).catch(err => console.error('[webhook] n8n dispatch error:', err))
+            }
 
             // Extract facts in background (not time-sensitive)
             agentOrchestrator.extractFactsInBackground(text, aiResponse)

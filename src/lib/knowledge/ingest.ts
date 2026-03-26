@@ -6,6 +6,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { Pinecone } from '@pinecone-database/pinecone'
+import { addUrlToKBNotebook, addTextToKBNotebook } from './notebooklm'
 
 
 const supabase = createClient(
@@ -82,13 +83,22 @@ export async function fetchArticleText(url: string): Promise<{ text: string; tit
 }
 
 export async function fetchYouTubeVideoTitle(videoId: string): Promise<string> {
+  const info = await fetchYouTubeVideoInfo(videoId)
+  return info.title
+}
+
+export async function fetchYouTubeVideoInfo(videoId: string): Promise<{ title: string; description: string }> {
   const apiKey = process.env.YOUTUBE_API_KEY
-  if (!apiKey) return videoId
+  if (!apiKey) return { title: videoId, description: '' }
   const res = await fetch(
     `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKey}`
   )
   const json = await res.json()
-  return json.items?.[0]?.snippet?.title || videoId
+  const snippet = json.items?.[0]?.snippet
+  return {
+    title: snippet?.title || videoId,
+    description: snippet?.description || ''
+  }
 }
 
 // ── AI Summary Generation ─────────────────────────────────────────────────────
@@ -138,10 +148,12 @@ export async function ingestSource(
     if (detectedType === 'youtube') {
       const videoId = extractYoutubeVideoId(input)
       if (!videoId) throw new Error('Invalid YouTube URL')
-      ;[text, title] = await Promise.all([
-        fetchYouTubeTranscript(videoId),
-        fetchYouTubeVideoTitle(videoId)
+      const [transcript, videoInfo] = await Promise.all([
+        fetchYouTubeTranscript(videoId).catch(() => null),
+        fetchYouTubeVideoInfo(videoId)
       ])
+      title = videoInfo.title
+      text = transcript || videoInfo.description
     } else if (detectedType === 'article') {
       const result = await fetchArticleText(input)
       text = result.text
@@ -172,7 +184,7 @@ export async function ingestSource(
 
   // ── Chunk and embed via Pinecone ──
   const chunks = chunkText(text)
-  const index = pinecone.index(INDEX_NAME).namespace(NAMESPACE)
+  const index = pinecone.index({ name: INDEX_NAME }).namespace(NAMESPACE)
   const sourceId = crypto.randomUUID()
 
   const records = chunks.map((chunk, i) => ({
@@ -203,6 +215,14 @@ export async function ingestSource(
     chunk_count: chunks.length,
     summary
   })
+
+  // ── Sync to NotebookLM (fire-and-forget, optional) ──
+  if (process.env.GOOGLE_SESSION_ID && process.env.GOOGLE_SESSION_IDTS) {
+    const nlmSync = detectedType === 'youtube' || detectedType === 'article'
+      ? addUrlToKBNotebook(input)
+      : addTextToKBNotebook(title, text)
+    nlmSync.catch(e => console.error('[kb/ingest] NotebookLM sync failed:', e.message))
+  }
 
   return { sourceId, title, chunkCount: chunks.length, summary, alreadyExists: false }
 }

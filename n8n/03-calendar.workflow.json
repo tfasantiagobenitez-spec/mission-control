@@ -1,0 +1,179 @@
+{
+  "name": "MC — Calendar",
+  "nodes": [
+    {
+      "id": "cal-0001",
+      "name": "When Called",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {}
+    },
+    {
+      "id": "cal-0002",
+      "name": "Get Google Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.MISSION_CONTROL_URL }}/api/n8n/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-mission-secret", "value": "={{ $env.MISSION_CONTROL_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "cal-0003",
+      "name": "Is Update or Create?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $('When Called').first().json.body.action.type }}",
+              "rightValue": "CALENDAR_UPDATE",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "cal-0004",
+      "name": "Build Event Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400],
+      "parameters": {
+        "jsCode": "const params = $('When Called').first().json.body.action.params;\nconst jobId = $('When Called').first().json.body.job_id;\n\nconst event = {\n  summary: params.title,\n  description: params.description || undefined,\n  location: params.location || undefined,\n  start: {\n    dateTime: params.start_iso,\n    timeZone: 'America/Argentina/Buenos_Aires'\n  },\n  end: {\n    dateTime: params.end_iso,\n    timeZone: 'America/Argentina/Buenos_Aires'\n  },\n};\n\n// Add attendees if provided\nif (params.attendees && params.attendees.length > 0) {\n  event.attendees = params.attendees.map(email => ({ email }));\n}\n\n// Add Google Meet (default: true)\nif (params.add_meet !== false) {\n  event.conferenceData = {\n    createRequest: {\n      requestId: jobId,\n      conferenceSolutionKey: { type: 'hangoutsMeet' }\n    }\n  };\n}\n\nreturn [{ json: event }];"
+      }
+    },
+    {
+      "id": "cal-0005",
+      "name": "Create Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1100, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $('Get Google Token').first().json.access_token }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "cal-0006",
+      "name": "Build Update Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 200],
+      "parameters": {
+        "jsCode": "const params = $('When Called').first().json.body.action.params;\nconst jobId = $('When Called').first().json.body.job_id;\n\nconst event = {};\nif (params.title)       event.summary = params.title;\nif (params.description) event.description = params.description;\nif (params.start_iso)   event.start = { dateTime: params.start_iso, timeZone: 'America/Argentina/Buenos_Aires' };\nif (params.end_iso)     event.end = { dateTime: params.end_iso, timeZone: 'America/Argentina/Buenos_Aires' };\nif (params.attendees)   event.attendees = params.attendees.map(e => ({ email: e }));\nif (params.add_meet !== false) {\n  event.conferenceData = {\n    createRequest: { requestId: `${jobId}-update`, conferenceSolutionKey: { type: 'hangoutsMeet' } }\n  };\n}\n\nreturn [{ json: { eventId: params.event_id, body: event } }];"
+      }
+    },
+    {
+      "id": "cal-0007",
+      "name": "Update Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1100, 200],
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/primary/events/{{ $json.eventId }}?conferenceDataVersion=1&sendUpdates=all",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $('Get Google Token').first().json.access_token }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "cal-0008",
+      "name": "Format Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 300],
+      "parameters": {
+        "jsCode": "const event = $input.first().json;\nconst meetLink = event.conferenceData?.entryPoints?.find(e => e.entryPointType === 'video')?.uri || null;\n\n// Format start date for human-readable response\nconst start = new Date(event.start?.dateTime || event.start?.date);\nconst startFmt = start.toLocaleString('es-AR', {\n  timeZone: 'America/Argentina/Buenos_Aires',\n  weekday: 'long', day: 'numeric', month: 'long',\n  hour: '2-digit', minute: '2-digit'\n});\n\nreturn [{ json: {\n  success: true,\n  event_id: event.id,\n  title: event.summary,\n  start_fmt: startFmt,\n  attendees: (event.attendees || []).map(a => a.email),\n  meet_link: meetLink,\n  event_link: event.htmlLink,\n}}];"
+      }
+    },
+    {
+      "id": "cal-0009",
+      "name": "Send Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1540, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MISSION_CONTROL_URL }}/api/n8n/callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-mission-secret", "value": "={{ $env.MISSION_CONTROL_WEBHOOK_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { job_id: $('When Called').first().json.body.job_id, chat_id: $('When Called').first().json.body.chat_id, action_type: $('When Called').first().json.body.action.type, result: $('Format Result').first().json } }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "When Called": {
+      "main": [[ { "node": "Get Google Token", "type": "main", "index": 0 } ]]
+    },
+    "Get Google Token": {
+      "main": [[ { "node": "Is Update or Create?", "type": "main", "index": 0 } ]]
+    },
+    "Is Update or Create?": {
+      "main": [
+        [ { "node": "Build Update Body", "type": "main", "index": 0 } ],
+        [ { "node": "Build Event Body", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Build Update Body": {
+      "main": [[ { "node": "Update Event", "type": "main", "index": 0 } ]]
+    },
+    "Build Event Body": {
+      "main": [[ { "node": "Create Event", "type": "main", "index": 0 } ]]
+    },
+    "Update Event": {
+      "main": [[ { "node": "Format Result", "type": "main", "index": 0 } ]]
+    },
+    "Create Event": {
+      "main": [[ { "node": "Format Result", "type": "main", "index": 0 } ]]
+    },
+    "Format Result": {
+      "main": [[ { "node": "Send Callback", "type": "main", "index": 0 } ]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true }
+}

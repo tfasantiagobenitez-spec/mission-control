@@ -53,12 +53,17 @@ export async function POST(req: NextRequest) {
       const result = await syncYouTubeChannel(channel, maxVideos)
       console.log(`[sync-channel] Sync done: ingested=${result.ingested}, skipped=${result.skipped}`)
       if (chatId) {
-        await sendTelegram(chatId,
+        let msg =
           `✅ *Sync completado: ${result.channelName}*\n` +
           `📥 Ingestados: ${result.ingested} videos\n` +
           `⏭️ Ya existían: ${result.skipped}\n` +
           `❌ Errores: ${result.errors.length}`
-        )
+        if (result.errors.length > 0) {
+          const preview = result.errors.slice(0, 5).map(e => `• ${e}`).join('\n')
+          msg += `\n\n*Detalle errores:*\n${preview}`
+          if (result.errors.length > 5) msg += `\n…y ${result.errors.length - 5} más`
+        }
+        await sendTelegram(chatId, msg)
       }
     } catch (err: any) {
       console.error(`[sync-channel] Error:`, err.message)

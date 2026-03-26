@@ -1,0 +1,214 @@
+{
+  "name": "MC — Main Router",
+  "nodes": [
+    {
+      "id": "a1b2c3d4-0001",
+      "name": "Action Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mission-action",
+        "responseMode": "immediatelyWithoutBody",
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-0002",
+      "name": "Validate Secret",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $json.headers['x-mission-secret'] }}",
+              "rightValue": "={{ $env.MISSION_CONTROL_WEBHOOK_SECRET }}",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0003",
+      "name": "Route by Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [680, 220],
+      "parameters": {
+        "mode": "expression",
+        "output": "input",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true },
+                "conditions": [{ "leftValue": "={{ $json.body.action.type }}", "rightValue": "GMAIL_SEND", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "gmail_send"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true },
+                "conditions": [{ "leftValue": "={{ $json.body.action.type }}", "rightValue": "GMAIL_REPLY", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "gmail_reply"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true },
+                "conditions": [{ "leftValue": "={{ $json.body.action.type }}", "rightValue": "CALENDAR_CREATE", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "calendar_create"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true },
+                "conditions": [{ "leftValue": "={{ $json.body.action.type }}", "rightValue": "CALENDAR_UPDATE", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "calendar_update"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true },
+                "conditions": [{ "leftValue": "={{ $json.body.action.type }}", "rightValue": "DRIVE_UPLOAD", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "drive_upload"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true },
+                "conditions": [{ "leftValue": "={{ $json.body.action.type }}", "rightValue": "DRIVE_SEARCH", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "drive_search"
+            }
+          ]
+        },
+        "fallbackOutput": "extra"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0010",
+      "name": "Gmail Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [900, 100],
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "GMAIL_WORKFLOW_ID", "mode": "id" },
+        "source": "database",
+        "options": { "waitForSubWorkflow": true }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0011",
+      "name": "Gmail Reply Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [900, 200],
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "GMAIL_WORKFLOW_ID", "mode": "id" },
+        "source": "database",
+        "options": { "waitForSubWorkflow": true }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0012",
+      "name": "Calendar Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [900, 300],
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "CALENDAR_WORKFLOW_ID", "mode": "id" },
+        "source": "database",
+        "options": { "waitForSubWorkflow": true }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0013",
+      "name": "Calendar Update Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [900, 400],
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "CALENDAR_WORKFLOW_ID", "mode": "id" },
+        "source": "database",
+        "options": { "waitForSubWorkflow": true }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0014",
+      "name": "Drive Upload Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [900, 500],
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "DRIVE_WORKFLOW_ID", "mode": "id" },
+        "source": "database",
+        "options": { "waitForSubWorkflow": true }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0015",
+      "name": "Drive Search Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [900, 600],
+      "parameters": {
+        "workflowId": { "__rl": true, "value": "DRIVE_WORKFLOW_ID", "mode": "id" },
+        "source": "database",
+        "options": { "waitForSubWorkflow": true }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0020",
+      "name": "Unauthorized Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 420],
+      "parameters": {
+        "jsCode": "console.log('Unauthorized request to mission-action webhook'); return [];"
+      }
+    }
+  ],
+  "connections": {
+    "Action Webhook": {
+      "main": [[ { "node": "Validate Secret", "type": "main", "index": 0 } ]]
+    },
+    "Validate Secret": {
+      "main": [
+        [ { "node": "Route by Type", "type": "main", "index": 0 } ],
+        [ { "node": "Unauthorized Response", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Route by Type": {
+      "main": [
+        [ { "node": "Gmail Workflow", "type": "main", "index": 0 } ],
+        [ { "node": "Gmail Reply Workflow", "type": "main", "index": 0 } ],
+        [ { "node": "Calendar Workflow", "type": "main", "index": 0 } ],
+        [ { "node": "Calendar Update Workflow", "type": "main", "index": 0 } ],
+        [ { "node": "Drive Upload Workflow", "type": "main", "index": 0 } ],
+        [ { "node": "Drive Search Workflow", "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "templateCredsSetupCompleted": true }
+}
