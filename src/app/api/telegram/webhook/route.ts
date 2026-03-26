@@ -547,6 +547,128 @@ async function processMessageAsync(message: any, token: string) {
         return
     }
 
+    // ── /reunion — crear evento en Google Calendar ────────────────────────────
+    // Uso: /reunion Mañana 10am con Juan García de Acme — revisar propuesta
+    if (text.startsWith('/reunion ')) {
+        const raw = message.text?.replace(/^\/reunion\s*/i, '').trim() || ''
+        if (!raw) {
+            await sendTelegramMessage(chatId, '📅 Uso: `/reunion [descripción natural]`\nEj: `/reunion Mañana 10am con Juan García de Acme — revisar propuesta`', token)
+            return
+        }
+
+        await sendTelegramMessage(chatId, '📅 Procesando reunión...', token)
+
+        try {
+            // Parse date/time with LLM
+            const now = new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })
+            const parseResult = await chatCompletion({
+                messages: [{
+                    role: 'user',
+                    content: `Hoy es ${now} (Argentina, UTC-3).
+Extraé los datos de esta reunión y respondé SOLO con JSON:
+{"title": "título del evento", "start": "2026-03-27T10:00:00-03:00", "end": "2026-03-27T11:00:00-03:00", "attendee_name": "nombre completo o null", "attendee_company": "empresa o null", "description": "descripción o null"}
+
+Reunión: "${raw}"
+
+Reglas:
+- Si dice "mañana" calculá la fecha correcta desde hoy
+- Duración por defecto: 1 hora
+- Timezone siempre -03:00
+- Si no hay hora específica, usá 10:00`
+                }],
+                temperature: 0,
+                max_tokens: 200,
+            })
+
+            const parsed = JSON.parse(
+                (parseResult.choices[0]?.message?.content || '{}')
+                    .replace(/```json\n?|\n?```/g, '').trim()
+            )
+
+            if (!parsed.start) throw new Error('No se pudo interpretar la fecha')
+
+            // Get Google token
+            const supabaseClient = createClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.SUPABASE_SERVICE_ROLE_KEY!
+            )
+            let { data: tokenData } = await supabaseClient
+                .from('google_tokens')
+                .select('*')
+                .ilike('email', 'sbenitez@areccoia.com')
+                .maybeSingle()
+            if (!tokenData) {
+                const { data: fallback } = await supabaseClient.from('google_tokens').select('*').limit(1)
+                tokenData = fallback?.[0] ?? null
+            }
+            if (!tokenData) throw new Error('No hay cuenta Google conectada')
+
+            // Refresh token if needed
+            let accessToken = tokenData.access_token
+            if (tokenData.expires_at < Date.now() + 60000 && tokenData.refresh_token) {
+                const { refreshGoogleToken } = await import('@/lib/gmail')
+                const refreshed = await refreshGoogleToken(tokenData.refresh_token)
+                accessToken = refreshed.access_token
+            }
+
+            // Build attendees array
+            const attendees = parsed.attendee_name
+                ? [{ email: `${parsed.attendee_name.toLowerCase().replace(/\s+/g, '.')}@placeholder.com`, displayName: parsed.attendee_name }]
+                : []
+
+            // Create Google Calendar event
+            const event = {
+                summary: parsed.title,
+                description: parsed.description || raw,
+                start: { dateTime: parsed.start, timeZone: 'America/Argentina/Buenos_Aires' },
+                end: { dateTime: parsed.end, timeZone: 'America/Argentina/Buenos_Aires' },
+                attendees,
+            }
+
+            const calRes = await fetch(
+                'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none',
+                {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(event),
+                }
+            )
+            if (!calRes.ok) throw new Error(`Calendar API error: ${await calRes.text()}`)
+            const createdEvent = await calRes.json()
+
+            // Add to CRM as lead if we have a name
+            if (parsed.attendee_name) {
+                const nameParts = parsed.attendee_name.split(' ')
+                await supabaseClient.from('leads').upsert({
+                    first_name: nameParts[0],
+                    last_name: nameParts.slice(1).join(' ') || null,
+                    company: parsed.attendee_company || null,
+                    source: 'telegram',
+                    status: 'new',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                }, { onConflict: 'id', ignoreDuplicates: true })
+            }
+
+            const startFormatted = new Date(parsed.start).toLocaleString('es-AR', {
+                timeZone: 'America/Argentina/Buenos_Aires',
+                weekday: 'long', day: 'numeric', month: 'long',
+                hour: '2-digit', minute: '2-digit'
+            })
+
+            const eventLink = createdEvent.htmlLink || ''
+            let reply = `✅ *Reunión creada*\n\n📋 ${parsed.title}\n📅 ${startFormatted}`
+            if (parsed.attendee_name) reply += `\n👤 ${parsed.attendee_name}${parsed.attendee_company ? ` — ${parsed.attendee_company}` : ''}`
+            if (eventLink) reply += `\n🔗 [Ver en Calendar](${eventLink})`
+
+            await sendTelegramMessage(chatId, reply, token)
+
+        } catch (err: any) {
+            await sendTelegramMessage(chatId, `❌ Error al crear reunión: ${err.message}`, token)
+        }
+        return
+    }
+
     if (text === '/ayuda' || text === '/help') {
         const msg = [
             `🤖 *Mission Control — Comandos*`,
@@ -560,6 +682,7 @@ async function processMessageAsync(message: any, token: string) {
             `🔍 */kb [pregunta]* — Knowledge base`,
             ``,
             `✏️ *Acciones rápidas:*`,
+            `📅 */reunion [descripción]* — Crear reunión en Calendar`,
             `➕ */lead Nombre, Empresa* — Crear lead`,
             `📝 */fact [proyecto] | [clave] | [valor]* — Guardar info de proyecto`,
             `📋 */facts [proyecto]* — Ver info guardada`,
