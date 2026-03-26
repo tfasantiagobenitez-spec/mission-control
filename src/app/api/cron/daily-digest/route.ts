@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 
         const [
             clientsRes, leadsRes, dealsRes, projectsRes,
-            activitiesRes, messagesRes,
+            activitiesRes, messagesRes, myRemindersRes, waitingRemindersRes,
         ] = await Promise.all([
             crm.from('clients').select('id, status'),
             crm.from('leads').select('id, status, first_name, last_name, company, created_at'),
@@ -61,6 +61,8 @@ export async function GET(req: NextRequest) {
             crm.from('projects').select('id, name, status, updated_at'),
             crm.from('activities').select('activity_type, title, occurred_at').order('occurred_at', { ascending: false }).limit(5),
             mc.from('conversation_messages').select('id', { count: 'exact', head: true }),
+            mc.from('crm_reminders').select('id, text, meeting_id, status').eq('owner', 'mine').eq('status', 'pending_approval').order('id', { ascending: false }).limit(10),
+            mc.from('crm_reminders').select('id, text, meeting_id').eq('owner', 'theirs').eq('status', 'waiting_on').order('id', { ascending: false }).limit(10),
         ])
 
         const clients = clientsRes.data || []
@@ -68,6 +70,8 @@ export async function GET(req: NextRequest) {
         const deals = dealsRes.data || []
         const projects = projectsRes.data || []
         const activities = activitiesRes.data || []
+        const myReminders = myRemindersRes.data || []
+        const waitingReminders = waitingRemindersRes.data || []
 
         const pipeline = deals.reduce((s, d) => s + (Number(d.value) || 0), 0)
         const activeClients = clients.filter(c => c.status === 'active').length
@@ -88,7 +92,7 @@ export async function GET(req: NextRequest) {
         })
 
         // Health indicator
-        const totalAlerts = staleLeads.length + staleDeals.length + staleProjects.length
+        const totalAlerts = staleLeads.length + staleDeals.length + staleProjects.length + myReminders.length
         const healthEmoji = totalAlerts === 0 ? '🟢' : totalAlerts <= 3 ? '🟡' : '🔴'
 
         const lines: string[] = [
@@ -135,6 +139,22 @@ export async function GET(req: NextRequest) {
             }
         } else {
             lines.push(``, `🟢 <b>Todo al día</b> — sin alertas pendientes.`)
+        }
+
+        // Action items from Fireflies meetings
+        if (myReminders.length > 0) {
+            lines.push(``, `━━━━━━━━━━━━━━━━━━━━━`)
+            lines.push(`📋 <b>Tus pendientes de reuniones (${myReminders.length})</b>`)
+            myReminders.forEach((r, i) => {
+                lines.push(`  ${i + 1}. ${r.text}`)
+            })
+        }
+
+        if (waitingReminders.length > 0) {
+            lines.push(``, `⏳ <b>Esperando respuesta de otros (${waitingReminders.length})</b>`)
+            waitingReminders.slice(0, 5).forEach(r => {
+                lines.push(`  • ${r.text}`)
+            })
         }
 
         // Recent CRM activity
