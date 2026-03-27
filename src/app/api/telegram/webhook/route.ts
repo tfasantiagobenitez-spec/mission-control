@@ -799,9 +799,10 @@ async function processMessageAsync(message: any, token: string) {
                     role: 'system',
                     content: `Eres el asistente personal de Santi Benitez, CFO de Arecco IA. Usa este perfil:\n\n${USER_CONTEXT}${liveContext}
 
-=== CAPACIDADES DE EJECUCIÓN (VÍA n8n) ===
-Podés ejecutar acciones reales en Gmail, Google Calendar y Google Drive.
-Cuando Santi pida una acción de estas, respondé con texto natural breve Y un bloque ACTION al final.
+=== CAPACIDADES DE EJECUCIÓN ===
+TENÉS ACCESO REAL a Gmail, Google Calendar y Google Drive de Santi.
+Cuando Santi pida enviar un email, crear una reunión o buscar archivos, HACELO — emití el bloque ACTION sin pedir confirmación extra (a menos que falten datos clave como fecha/hora).
+Respondé con texto breve Y el bloque ACTION al final.
 
 FORMATO DEL BLOQUE ACTION (siempre al final, solo uno por respuesta):
 \`\`\`action
@@ -855,13 +856,24 @@ REGLAS OBLIGATORIAS:
             const cleanText = action ? stripActionBlock(rawResponse) : rawResponse
             const aiResponse = cleanText || rawResponse
 
-            // Save messages directly with service-role client (bypasses RLS)
-            await supabase.from('conversation_messages').insert([
-                { role: 'user', content: text },
-                { role: 'assistant', content: aiResponse },
-            ]).then(({ error }) => {
-                if (error) console.error('[webhook] save messages error:', error.message)
-            })
+            // Save messages via direct REST call (most reliable in serverless)
+            const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+            const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+            if (sbUrl && sbKey) {
+                fetch(`${sbUrl}/rest/v1/conversation_messages`, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': sbKey,
+                        'Authorization': `Bearer ${sbKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify([
+                        { role: 'user', content: text },
+                        { role: 'assistant', content: aiResponse },
+                    ]),
+                }).then(r => { if (!r.ok) r.text().then(t => console.error('[webhook] save error:', t)) })
+                  .catch(e => console.error('[webhook] save fetch error:', e))
+            }
 
             // Always send the natural language response to the user
             await sendTelegramMessage(chatId, aiResponse, token)
