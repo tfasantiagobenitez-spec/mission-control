@@ -719,7 +719,12 @@ async function processMessageAsync(message: any, token: string) {
                 ]).then(([clients, leads, deals, projects]) => ({ clients, leads, deals, projects })).catch(() => null),
             ])
 
-            let liveContext = `\n\n=== MEMORIA Y CONTEXTO ===\n`
+            const nowBsAs = new Date().toLocaleString('es-AR', {
+                timeZone: 'America/Argentina/Buenos_Aires',
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            })
+            let liveContext = `\n\n=== MEMORIA Y CONTEXTO ===\n**Fecha y hora actual (Buenos Aires):** ${nowBsAs}\n`
 
             if (memoryContext.coreFacts?.length > 0) {
                 liveContext += `**Hechos conocidos sobre Santi:**\n`
@@ -878,9 +883,9 @@ REGLAS OBLIGATORIAS:
             // Always send the natural language response to the user
             await sendTelegramMessage(chatId, aiResponse, token)
 
-            // If Claude emitted an ACTION block, dispatch to n8n
+            // If Claude emitted an ACTION block, dispatch and AWAIT — Vercel kills fire-and-forget
             if (action) {
-                dispatchToN8n({
+                await dispatchToN8n({
                     chatId,
                     action,
                     telegramFileId: attachedFile?.fileId,
