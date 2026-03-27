@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase() {
+    return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+}
 
 export interface Message {
     role: 'user' | 'assistant';
@@ -22,14 +24,14 @@ export const supabaseMemory = {
     // --- MESSAGES ---
 
     saveMessage: async (role: 'user' | 'assistant', content: string) => {
-        const { error } = await supabase
+        const { error } = await getSupabase()
             .from('conversation_messages')
             .insert({ role, content });
         if (error) console.error('[memory] saveMessage error:', error.message);
     },
 
     getRecentMessages: async (limit = 20): Promise<Message[]> => {
-        const { data, error } = await supabase
+        const { data, error } = await getSupabase()
             .from('conversation_messages')
             .select('role, content, created_at')
             .order('created_at', { ascending: false })
@@ -45,14 +47,14 @@ export const supabaseMemory = {
     // --- FACTS ---
 
     saveFact: async (key: string, value: string, source?: string) => {
-        const { error } = await supabase
+        const { error } = await getSupabase()
             .from('conversation_facts')
             .upsert({ key, value, source, updated_at: new Date().toISOString() }, { onConflict: 'key' });
         if (error) console.error('[memory] saveFact error:', error.message);
     },
 
     getFacts: async (): Promise<Fact[]> => {
-        const { data, error } = await supabase
+        const { data, error } = await getSupabase()
             .from('conversation_facts')
             .select('key, value, source')
             .order('updated_at', { ascending: false });
