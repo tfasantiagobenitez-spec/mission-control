@@ -5,7 +5,6 @@ import { fetchGoogleCalendarEvents } from '@/lib/calendar-service'
 import { searchCRM } from '@/lib/crm/search'
 import { USER_CONTEXT } from '@/lib/user-context'
 import { agentOrchestrator } from '@/lib/agent'
-import { supabaseMemory } from '@/lib/memory/supabase-memory'
 import { extractAction, stripActionBlock, dispatchToN8n } from '@/lib/n8n-dispatcher'
 import { createClient } from '@supabase/supabase-js'
 import { createTask } from '@/lib/crm/clickup'
@@ -856,11 +855,13 @@ REGLAS OBLIGATORIAS:
             const cleanText = action ? stripActionBlock(rawResponse) : rawResponse
             const aiResponse = cleanText || rawResponse
 
-            // Save messages SYNCHRONOUSLY before sending
-            await Promise.all([
-                supabaseMemory.saveMessage('user', text),
-                supabaseMemory.saveMessage('assistant', aiResponse),
-            ]).catch(err => console.error('[webhook] save messages error:', err))
+            // Save messages directly with service-role client (bypasses RLS)
+            await supabase.from('conversation_messages').insert([
+                { role: 'user', content: text },
+                { role: 'assistant', content: aiResponse },
+            ]).then(({ error }) => {
+                if (error) console.error('[webhook] save messages error:', error.message)
+            })
 
             // Always send the natural language response to the user
             await sendTelegramMessage(chatId, aiResponse, token)
