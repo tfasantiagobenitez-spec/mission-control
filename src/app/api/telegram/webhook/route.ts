@@ -856,11 +856,11 @@ REGLAS OBLIGATORIAS:
             const cleanText = action ? stripActionBlock(rawResponse) : rawResponse
             const aiResponse = cleanText || rawResponse
 
-            // Save messages via direct REST call (most reliable in serverless)
+            // Save messages — awaited so serverless doesn't terminate before completing
             const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
             const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY
             if (sbUrl && sbKey) {
-                fetch(`${sbUrl}/rest/v1/conversation_messages`, {
+                await fetch(`${sbUrl}/rest/v1/conversation_messages`, {
                     method: 'POST',
                     headers: {
                         'apikey': sbKey,
